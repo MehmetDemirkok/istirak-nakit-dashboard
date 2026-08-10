@@ -1,39 +1,25 @@
-İŞTİRAK NAKİT AKIŞ DASHBOARD — KURULUM (Yazılımcı değilseniz bunu okuyun)
-================================================================================
+İŞTİRAK NAKİT AKIŞ DASHBOARD
+============================
+
+Yazılımcı olmanıza gerek yok.
 
 1) Node.js kurun (bir kez)
-   - https://nodejs.org adresine gidin
-   - "LTS" sürümünü indirip kurun
-   - Bilgisayarı yeniden başlatmanız gerekebilir
+   https://nodejs.org → LTS indir → kur
 
-2) Bu klasörü bilgisayarınıza koyun
-   Örnek: C:\Apps\istirak-nakit-dashboard
-   (OneDrive paylaşımlı klasöre koymayın; mümkünse yerel disk kullanın)
+2) Bu klasörü bilgisayarınıza kopyalayın
 
-3) Masaüstü kısayolu oluşturun (bir kez)
-   Windows:  "Masaustu-Kisayol-Olustur.bat" dosyasına çift tıklayın
-   macOS:    "Masaustu-Kisayol-Olustur.command" dosyasına çift tıklayın
-             (Mac'te izin isterse: sağ tık → Aç)
+3) TEK DOSYA — çift tıklayın
+   Windows:  Baslat.bat
+   Mac:      Baslat.command
+             (Mac engellerse: sağ tık → Aç)
 
-4) Her gün kullanımı
-   Masaüstündeki "Istirak Nakit Dashboard" kısayoluna çift tıklayın.
-   Tarayıcı otomatik açılır: http://127.0.0.1:8787
-   Siyah/komut penceresini kapatınca program kapanır — kapatmayın.
+   Bu dosya:
+   - eksikleri otomatik kurar
+   - uygulamayı açar
+   - masaüstüne kısayol koyar
 
-5) İlk giriş
-   Kullanıcı: admin
-   Şifre:     Admin123!
-   (Girişten sonra şifreyi değiştirmeniz önerilir — BT / yazılım ekibine sorun)
+4) Sonraki açılışlar
+   Masaüstündeki "İştirak Nakit Dashboard" kısayoluna çift tıklayın
 
-6) Verileriniz nerede?
-   Bu klasörün içindeki "data" klasöründe kalır (buluta gitmez).
-   Yedek için "data" klasörünü kopyalamanız yeterlidir.
-
-SORUN GİDERME
--------------
-- "Node.js bulunamadı" → Node.js LTS kurun, bilgisayarı yeniden başlatın.
-- Tarayıcı açılmıyor → Adres çubuğuna yazın: http://127.0.0.1:8787
-- Port meşgul → Bilgisayarı yeniden başlatıp tekrar deneyin.
-- Mac'te "geliştirici doğrulanamadı" → Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç
-
-Geliştirici / BT için: npm install && npm run build && npm start
+Giriş: admin / Admin123!
+Adres: http://127.0.0.1:8787

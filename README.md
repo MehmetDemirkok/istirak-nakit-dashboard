@@ -5,16 +5,12 @@ Lokal web uygulaması: iştirak Excel’lerini dashboard’a çevirir; PPTX / PD
 
 ## Son kullanıcı (yazılımcı değil)
 
-1. [Node.js LTS](https://nodejs.org) kurun.  
+1. [Node.js LTS](https://nodejs.org) kurun (bir kez).  
 2. Bu klasörü bilgisayara kopyalayın.  
-3. **Windows:** `Masaustu-Kisayol-Olustur.bat` → çift tık.  
-   **macOS:** `Masaustu-Kisayol-Olustur.command` → çift tık.  
-4. Masaüstündeki **Istirak Nakit Dashboard** kısayoluna çift tıklayın.  
-5. Tarayıcı: [http://127.0.0.1:8787](http://127.0.0.1:8787)
+3. **Tek dosya:** `Baslat.bat` (Windows) veya `Baslat.command` (Mac) → çift tık.  
+4. Masaüstündeki kısayola çift tıklayın → [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
-Detaylı adımlar: **`KURULUM.txt`**
-
-İlk giriş: `admin` / `Admin123!`
+Detay: **`KURULUM.txt`** · İlk giriş: `admin` / `Admin123!`
 
 ## Geliştirici
 
