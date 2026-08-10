@@ -1,6 +1,6 @@
 import PptxGenJS from 'pptxgenjs';
 import { db, type Company, type CompanyProfile } from './db.js';
-import { getCategoryTotals, getKpis, getMonthlySeries, getWeeklyBalanceSeries } from './analytics.js';
+import { getPeriodReport, type PeriodFilter } from './periodReport.js';
 
 function money(n: number): string {
   return new Intl.NumberFormat('tr-TR', {
@@ -25,24 +25,22 @@ type CellOpts = {
   options?: Record<string, unknown>;
 };
 
-export async function buildPresentation(companyId: string): Promise<Buffer> {
+export async function buildPresentation(companyId: string, filter: PeriodFilter): Promise<Buffer> {
   const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(companyId) as Company | undefined;
   if (!company) throw new Error('Şirket bulunamadı');
 
   const profile = (db.prepare(`SELECT * FROM company_profiles WHERE company_id = ?`).get(companyId) ||
     {}) as Partial<CompanyProfile>;
 
-  const kpis = getKpis(companyId);
-  const categories = getCategoryTotals(companyId);
-  const monthly = getMonthlySeries(companyId);
-  const weekly = getWeeklyBalanceSeries(companyId).slice(0, 16);
+  const report = getPeriodReport(companyId, filter);
+  const { kpis, categories, monthly, weekly } = report;
 
   const PptxCtor = (PptxGenJS as any).default || PptxGenJS;
   const pptx: any = new PptxCtor();
   pptx.defineLayout({ name: 'WIDE', width: 13.333, height: 7.5 });
   pptx.layout = 'WIDE';
   pptx.author = 'İştirak Nakit Dashboard';
-  pptx.title = `${company.name} — Nakit Akış Sunumu`;
+  pptx.title = `${company.name} — ${report.label}`;
 
   const navy = '0B4DA8';
   const charcoal = '374556';
@@ -66,22 +64,22 @@ export async function buildPresentation(companyId: string): Promise<Buffer> {
     h: 0.7,
     fill: { color: navy },
   });
-  slide.addText(`${company.name.toUpperCase()}  •  NAKİT AKIŞ DASHBOARD`, {
+  slide.addText(`${company.name.toUpperCase()}  •  ${report.label.toUpperCase()}`, {
     x: 0.3,
     y: 0.15,
-    w: 10,
+    w: 10.5,
     h: 0.4,
-    fontSize: 16,
+    fontSize: 15,
     bold: true,
     color: white,
     fontFace: 'Arial',
   });
-  slide.addText(`${kpis.year}`, {
-    x: 11.5,
+  slide.addText('NAKİT AKIŞ', {
+    x: 11.2,
     y: 0.18,
-    w: 1.5,
+    w: 1.8,
     h: 0.35,
-    fontSize: 14,
+    fontSize: 11,
     color: white,
     align: 'right',
     fontFace: 'Arial',
@@ -108,6 +106,7 @@ export async function buildPresentation(companyId: string): Promise<Buffer> {
   });
 
   const profileRows: [string, string][] = [
+    ['Dönem', report.label],
     ['Kuruluş Tarihi', profile.founded_at || '—'],
     ['YK Başkanı', profile.board_chair || '—'],
     ['YK Başkan V.', profile.board_vice || '—'],
@@ -116,7 +115,6 @@ export async function buildPresentation(companyId: string): Promise<Buffer> {
     ['Personel', profile.personnel_count || '—'],
     ['Kredi Durumu', profile.credits || '—'],
     ['Patent', profile.patents || '—'],
-    ['Proje Sayısı', profile.project_count || '—'],
   ];
 
   slide.addTable(
@@ -198,11 +196,11 @@ export async function buildPresentation(companyId: string): Promise<Buffer> {
       options: { bold: true, fontSize: 8, color: white, align: 'right', fill: { color: charcoal } },
     },
     {
-      text: shortMoney(kpis.totalOutflow / 12),
+      text: shortMoney(filter.month == null ? kpis.totalOutflow / 12 : kpis.totalOutflow),
       options: { bold: true, fontSize: 8, color: white, align: 'right', fill: { color: charcoal } },
     },
     {
-      text: shortMoney(kpis.totalOutflow),
+      text: shortMoney(categories.reduce((s, c) => s + c.yearly, 0)),
       options: { bold: true, fontSize: 8, color: white, align: 'right', fill: { color: charcoal } },
     },
   ]);
@@ -214,7 +212,7 @@ export async function buildPresentation(companyId: string): Promise<Buffer> {
       options: { bold: true, fontSize: 8, color: white, align: 'right', fill: { color: orange } },
     },
     {
-      text: shortMoney(kpis.totalInflow / 12),
+      text: shortMoney(filter.month == null ? kpis.totalInflow / 12 : kpis.totalInflow),
       options: { bold: true, fontSize: 8, color: white, align: 'right', fill: { color: orange } },
     },
     {
@@ -278,8 +276,12 @@ export async function buildPresentation(companyId: string): Promise<Buffer> {
   });
 
   const pieData = categories
-    .filter((c) => c.yearly > 0)
-    .map((c) => ({ name: c.shortLabel, labels: [c.shortLabel], values: [c.yearly] }));
+    .filter((c) => c.monthly > 0 || c.yearly > 0)
+    .map((c) => ({
+      name: c.shortLabel,
+      labels: [c.shortLabel],
+      values: [filter.month == null ? c.yearly : c.monthly],
+    }));
 
   slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
     x: 3.9,
@@ -311,16 +313,6 @@ export async function buildPresentation(companyId: string): Promise<Buffer> {
       showLegend: true,
       legendPos: 'b',
       chartColors: [navy, orange, '0D9488', '6366F1', 'E11D48', 'CA8A04', '64748B', '0891B2', '7C3AED'],
-    });
-  } else {
-    slide.addText('Gider verisi yok', {
-      x: 4.5,
-      y: 3.4,
-      w: 3,
-      h: 0.4,
-      fontSize: 12,
-      color: '99AABB',
-      align: 'center',
     });
   }
 

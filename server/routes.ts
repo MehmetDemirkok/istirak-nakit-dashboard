@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'node:path';
-import fs from 'node:fs';
 import { v4 as uuid } from 'uuid';
 import { db, UPLOADS_DIR, type Company, type CompanyProfile } from './db.js';
 import { importExcelFile } from './importService.js';
@@ -15,7 +13,11 @@ import {
   getWeeklyBalanceSeries,
 } from './analytics.js';
 import { buildPresentation } from './pptxExport.js';
+import { buildPdfReport } from './pdfExport.js';
+import { buildExcelReport } from './excelExport.js';
+import { parsePeriodQuery, periodLabel } from './periodReport.js';
 import { requireAuth } from './authRoutes.js';
+import { seedThreeDemoCompanies } from './demoSeed.js';
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -212,32 +214,93 @@ api.get('/companies/:id/dashboard', (req, res) => {
   });
 });
 
-// PPTX
-api.get('/companies/:id/presentation', async (req, res) => {
+// Exports: PPTX / PDF / Excel with year+month filter
+function asciiFileBase(companyName: string, label: string) {
+  const base = `${companyName}-${label}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return base || 'istirak-rapor';
+}
+
+api.get('/companies/:id/export/:format', async (req, res) => {
   try {
+    const format = String(req.params.format || '').toLowerCase();
+    if (!['pptx', 'pdf', 'xlsx', 'excel'].includes(format)) {
+      return res.status(400).json({ error: 'format pptx | pdf | xlsx olmalı' });
+    }
     const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.params.id) as
       | Company
       | undefined;
     if (!company) return res.status(404).json({ error: 'Bulunamadı' });
     if (company.role === 'parent') {
-      return res.status(400).json({ error: 'Sunum iştirak bazında üretilir' });
+      return res.status(400).json({ error: 'Rapor iştirak bazında üretilir' });
     }
     if (!companyHasData(company.id)) {
       return res.status(400).json({ error: 'Önce Excel yükleyin' });
     }
 
-    const buf = await buildPresentation(company.id);
-    const asciiName = company.name
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9._-]+/g, '_')
-      .replace(/^_|_$/g, '') || 'istirak';
-    const filename = `${asciiName}-nakit-akis.pptx`;
+    const filter = parsePeriodQuery(
+      { year: req.query.year as string | undefined, month: req.query.month as string | undefined },
+      company.id,
+    );
+    const label = periodLabel(filter);
+    const fileBase = asciiFileBase(company.name, label);
+
+    if (format === 'pptx') {
+      const buf = await buildPresentation(company.id, filter);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.pptx"`);
+      return res.send(buf);
+    }
+
+    if (format === 'pdf') {
+      const buf = await buildPdfReport(company.id, filter);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.pdf"`);
+      return res.send(buf);
+    }
+
+    const buf = await buildExcelReport(company.id, filter);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.xlsx"`);
+    return res.send(buf);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Export hatası' });
+  }
+});
+
+// backward-compatible alias
+api.get('/companies/:id/presentation', async (req, res) => {
+  req.params.format = 'pptx';
+  // reuse export handler by forwarding query
+  (req as any).url = `/companies/${req.params.id}/export/pptx`;
+  const filter = parsePeriodQuery(
+    { year: req.query.year as string | undefined, month: req.query.month as string | undefined },
+    req.params.id,
+  );
+  try {
+    const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.params.id) as
+      | Company
+      | undefined;
+    if (!company) return res.status(404).json({ error: 'Bulunamadı' });
+    if (company.role === 'parent') return res.status(400).json({ error: 'Rapor iştirak bazında üretilir' });
+    if (!companyHasData(company.id)) return res.status(400).json({ error: 'Önce Excel yükleyin' });
+    const buf = await buildPresentation(company.id, filter);
+    const fileBase = asciiFileBase(company.name, periodLabel(filter));
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     );
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.pptx"`);
     res.send(buf);
   } catch (err) {
     console.error(err);
@@ -245,46 +308,16 @@ api.get('/companies/:id/presentation', async (req, res) => {
   }
 });
 
-// Seed helper for demo
-api.post('/demo/seed', async (req, res) => {
+// Seed helper for 3 demo companies
+api.post('/demo/seed', async (_req, res) => {
   try {
-    const sample = path.join(process.cwd(), 'data', 'samples', 'ornek-nakit-akis.xlsx');
-    if (!fs.existsSync(sample)) {
-      return res.status(400).json({ error: 'Örnek Excel bulunamadı (data/samples/ornek-nakit-akis.xlsx)' });
-    }
-
-    let parent = db.prepare(`SELECT * FROM companies WHERE role = 'parent'`).get() as Company | undefined;
-    if (!parent) {
-      const id = uuid();
-      db.prepare(`INSERT INTO companies (id, name, role, parent_id) VALUES (?, ?, 'parent', NULL)`).run(
-        id,
-        'Ana Holding A.Ş.',
-      );
-      db.prepare(`INSERT INTO company_profiles (company_id) VALUES (?)`).run(id);
-      parent = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(id) as Company;
-    }
-
-    let sub = db
-      .prepare(`SELECT * FROM companies WHERE role = 'subsidiary' AND parent_id = ? LIMIT 1`)
-      .get(parent.id) as Company | undefined;
-    if (!sub) {
-      const id = uuid();
-      db.prepare(`INSERT INTO companies (id, name, role, parent_id) VALUES (?, ?, 'subsidiary', ?)`).run(
-        id,
-        'Demo İştirak A.Ş.',
-        parent.id,
-      );
-      db.prepare(`INSERT INTO company_profiles (company_id) VALUES (?)`).run(id);
-      db.prepare(
-        `UPDATE company_profiles SET founded_at = ?, board_chair = ?, personnel_count = ? WHERE company_id = ?`,
-      ).run('2018', 'Demo Başkan', '42', id);
-      sub = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(id) as Company;
-    }
-
-    const dest = path.join(UPLOADS_DIR, `demo-${Date.now()}.xlsx`);
-    fs.copyFileSync(sample, dest);
-    const result = await importExcelFile(sub.id, dest, 'ornek-nakit-akis.xlsx');
-    res.json({ parent, subsidiary: sub, import: result.message, status: result.status });
+    const result = await seedThreeDemoCompanies();
+    res.json({
+      parent: result.parent,
+      subsidiaries: result.subsidiaries,
+      message: `${result.subsidiaries.length} demo iştirak yüklendi`,
+      status: 'ok',
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Seed hatası' });

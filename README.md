@@ -41,11 +41,11 @@ Oturum bu bilgisayarda saklanır (SQLite + çerez/token).
 
 ## Kullanım akışı
 
-1. **Şirketler** — Ana şirket + iştirakleri ekleyin (veya “Demo Veri Yükle”).
+1. **Şirketler** — Ana şirket + iştirakleri ekleyin (veya “3 Demo Şirket Yükle”).
 2. **Excel Yükle** — İştirak seçip `.xlsx` dosyasını yükleyin.
 3. **Şirket Profili** — Sunum kartı alanlarını doldurun (kuruluş, YK, personel…).
 4. **Dashboard** — KPI, aylık grafik, gider dağılımı, haftalık bakiye; ana şirkette konsolide görünüm.
-5. **PPTX İndir** — İştirak dashboard’undan sunumu indirin.
+5. **Rapor çıktısı** — Yıl + ay seçin; **PPTX / PDF / Excel** indirin (ör. `Anadolu Enerji · Ağustos 2025`).
 
 ## Veri konumu (gizlilik)
 

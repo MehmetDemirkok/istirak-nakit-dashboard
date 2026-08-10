@@ -50,16 +50,55 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
       .finally(() => setBusy(false));
   }, [companyId]);
 
+  const [exportYear, setExportYear] = useState<number>(new Date().getFullYear());
+  const [exportMonth, setExportMonth] = useState<number | 'all'>('all');
+  const [exporting, setExporting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (data?.kpis?.year) setExportYear(data.kpis.year);
+  }, [data?.kpis?.year]);
+
   const selected = companies.find((c) => c.id === companyId);
 
-  const download = async () => {
+  const periodFileLabel =
+    exportMonth === 'all'
+      ? `${exportYear}-Yillik`
+      : `${exportYear}-${['Ocak','Subat','Mart','Nisan','Mayis','Haziran','Temmuz','Agustos','Eylul','Ekim','Kasim','Aralik'][exportMonth]}`;
+
+  const download = async (format: 'pptx' | 'pdf' | 'xlsx') => {
     if (!selected || selected.role === 'parent') return;
+    setExporting(format);
+    setErr(null);
     try {
-      await api.downloadPresentation(selected.id, `${selected.name}-nakit-akis.pptx`);
+      const safe = selected.name.replace(/[^\w\-]+/gi, '_');
+      await api.downloadExport(
+        selected.id,
+        format,
+        { year: exportYear, month: exportMonth },
+        `${safe}-${periodFileLabel}.${format === 'xlsx' ? 'xlsx' : format}`,
+      );
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'İndirme hatası');
+    } finally {
+      setExporting(null);
     }
   };
+
+  const MONTHS = [
+    'Ocak',
+    'Şubat',
+    'Mart',
+    'Nisan',
+    'Mayıs',
+    'Haziran',
+    'Temmuz',
+    'Ağustos',
+    'Eylül',
+    'Ekim',
+    'Kasım',
+    'Aralık',
+  ];
+
 
   const pieData = useMemo(() => {
     const cats = data?.categories || [];
@@ -119,13 +158,78 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
               </option>
             ))}
           </select>
-          {selected?.role === 'subsidiary' && (
-            <button className="btn btn-accent" type="button" onClick={download}>
-              PPTX İndir
-            </button>
-          )}
         </div>
       </div>
+
+      {selected?.role === 'subsidiary' && data?.hasData && (
+        <section className="card panel" style={{ marginBottom: '1rem' }}>
+          <h3>Dönemsel Rapor Çıktısı</h3>
+          <p style={{ margin: '0 0 0.85rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
+            Örn. <strong>{selected.name} · Ağustos {exportYear}</strong> — PPTX, PDF veya Excel indirin.
+          </p>
+          <div className="toolbar">
+            <label className="field" style={{ margin: 0 }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Yıl</span>
+              <select
+                value={exportYear}
+                onChange={(e) => setExportYear(Number(e.target.value))}
+                style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.45rem 0.7rem' }}
+              >
+                {[exportYear - 1, exportYear, exportYear + 1]
+                  .filter((y, i, a) => a.indexOf(y) === i)
+                  .map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                <option value={2025}>2025</option>
+                <option value={2026}>2026</option>
+              </select>
+            </label>
+            <label className="field" style={{ margin: 0 }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Ay</span>
+              <select
+                value={exportMonth === 'all' ? 'all' : String(exportMonth)}
+                onChange={(e) =>
+                  setExportMonth(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                }
+                style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.45rem 0.7rem' }}
+              >
+                <option value="all">Tüm yıl</option>
+                {MONTHS.map((m, i) => (
+                  <option key={m} value={i}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="btn btn-accent"
+              type="button"
+              disabled={!!exporting}
+              onClick={() => download('pptx')}
+            >
+              {exporting === 'pptx' ? '…' : 'PPTX'}
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={!!exporting}
+              onClick={() => download('pdf')}
+            >
+              {exporting === 'pdf' ? '…' : 'PDF'}
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={!!exporting}
+              onClick={() => download('xlsx')}
+            >
+              {exporting === 'xlsx' ? '…' : 'Excel'}
+            </button>
+          </div>
+        </section>
+      )}
 
       {err && <div className="alert err">{err}</div>}
       {busy && <div className="alert warn">Yükleniyor…</div>}

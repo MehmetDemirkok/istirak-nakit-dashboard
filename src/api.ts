@@ -126,14 +126,23 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
     }),
-  downloadPresentation: async (id: string, filename: string) => {
-    const res = await fetch(`/api/companies/${id}/presentation`, {
+  downloadExport: async (
+    id: string,
+    format: 'pptx' | 'pdf' | 'xlsx',
+    opts: { year?: number; month?: number | 'all' },
+    filename: string,
+  ) => {
+    const q = new URLSearchParams();
+    if (opts.year) q.set('year', String(opts.year));
+    if (opts.month === 'all' || opts.month == null) q.set('month', 'all');
+    else q.set('month', String(opts.month));
+    const res = await fetch(`/api/companies/${id}/export/${format}?${q.toString()}`, {
       credentials: 'include',
       headers: authHeaders(),
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      throw new Error(j.error || 'Sunum indirilemedi');
+      throw new Error(j.error || 'İndirme başarısız');
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -142,6 +151,9 @@ export const api = {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  },
+  downloadPresentation: async (id: string, filename: string) => {
+    return api.downloadExport(id, 'pptx', { month: 'all' }, filename);
   },
 };
 

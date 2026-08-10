@@ -57,7 +57,10 @@ export default function CompaniesPage({
     setErr(null);
     try {
       const r = await api.seedDemo();
-      setMsg(`Demo yüklendi: ${r.subsidiary?.name} — ${r.import}`);
+      setMsg(
+        r.message ||
+          `Demo yüklendi: ${(r.subsidiaries || []).map((s: any) => s.name).join(', ')}`,
+      );
       await onChange();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Demo yüklenemedi');
@@ -75,7 +78,7 @@ export default function CompaniesPage({
         </div>
         <div className="toolbar">
           <button className="btn btn-ghost" type="button" onClick={seed} disabled={busy}>
-            Demo Veri Yükle
+            3 Demo Şirket Yükle
           </button>
         </div>
       </div>

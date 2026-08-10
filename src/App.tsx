@@ -114,16 +114,18 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <div style={{ marginBottom: '0.5rem' }}>
-            Giriş: <strong style={{ color: '#fff' }}>{user.username}</strong>
+          <div className="sidebar-user">
+            <div className="sidebar-avatar">{user.username.slice(0, 1).toUpperCase()}</div>
+            <div className="sidebar-user-meta">
+              <div className="name">{user.username}</div>
+              <div className="role">{user.role === 'admin' ? 'Yönetici' : user.role}</div>
+            </div>
           </div>
-          <button className="btn btn-ghost" type="button" onClick={logout} style={{ width: '100%' }}>
+          <button className="sidebar-logout" type="button" onClick={logout}>
             Çıkış Yap
           </button>
-          <div style={{ marginTop: '0.75rem' }}>
-            Veriler yalnızca bu bilgisayarda saklanır
-            <br />
-            (127.0.0.1 • SQLite)
+          <div className="sidebar-note">
+            Veriler bu bilgisayarda kalır
             {error && (
               <>
                 <br />
