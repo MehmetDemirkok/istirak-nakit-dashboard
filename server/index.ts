@@ -6,12 +6,13 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { api } from './routes.js';
 import { DATA_DIR } from './db.js';
-import { cleanupExpiredSessions, ensureAdminUser } from './auth.js';
+import { clearAllSessions, cleanupExpiredSessions, ensureAdminUser } from './auth.js';
 import { authRoutes } from './authRoutes.js';
 import { activityMiddleware } from './activityLog.js';
 
 ensureAdminUser();
 cleanupExpiredSessions();
+clearAllSessions();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');

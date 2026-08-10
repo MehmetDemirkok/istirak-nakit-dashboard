@@ -405,7 +405,7 @@ api.get('/companies/:id/export/:format', async (req, res) => {
 
 // backward-compatible alias
 api.get('/companies/:id/presentation', async (req, res) => {
-  req.params.format = 'pptx';
+  (req.params as { id: string; format?: string }).format = 'pptx';
   // reuse export handler by forwarding query
   (req as any).url = `/companies/${req.params.id}/export/pptx`;
   const filter = parsePeriodQuery(

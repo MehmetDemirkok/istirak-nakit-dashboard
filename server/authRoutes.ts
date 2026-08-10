@@ -135,7 +135,8 @@ authRoutes.delete('/avatar', requireAuth, (req, res) => {
 });
 
 authRoutes.get('/avatar/:userId', requireAuth, (req, res) => {
-  const filePath = getUserAvatarPath(req.params.userId);
+  const userId = String(req.params.userId);
+  const filePath = getUserAvatarPath(userId);
   if (!filePath) return res.status(404).json({ error: 'Fotoğraf yok' });
   res.sendFile(path.resolve(filePath));
 });

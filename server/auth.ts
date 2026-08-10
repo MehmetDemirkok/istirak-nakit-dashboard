@@ -176,3 +176,8 @@ export function getUserAvatarPath(userId: string): string | null {
 export function cleanupExpiredSessions(): void {
   db.prepare(`DELETE FROM sessions WHERE expires_at < datetime('now')`).run();
 }
+
+/** Uygulama her açıldığında tüm oturumları sıfırla — login zorunlu olsun. */
+export function clearAllSessions(): void {
+  db.prepare(`DELETE FROM sessions`).run();
+}
