@@ -20,10 +20,11 @@ export interface CategoryTotal {
 
 function sumAmount(
   companyId: string,
+  year: number,
   opts: { category?: string; lineKind?: string; periodType: string; periodIndex?: number },
 ): number {
-  let sql = `SELECT COALESCE(SUM(amount),0) as s FROM cash_flow_lines WHERE company_id = ? AND period_type = ?`;
-  const params: (string | number)[] = [companyId, opts.periodType];
+  let sql = `SELECT COALESCE(SUM(amount),0) as s FROM cash_flow_lines WHERE company_id = ? AND year = ? AND period_type = ?`;
+  const params: (string | number)[] = [companyId, year, opts.periodType];
   if (opts.category) {
     sql += ` AND category = ?`;
     params.push(opts.category);
@@ -40,11 +41,16 @@ function sumAmount(
   return row?.s ?? 0;
 }
 
-function sumDetails(companyId: string, category: string, periodType: string, periodIndex?: number): number {
-  // Prefer detail lines; fallback to total_* kind
+export function sumDetails(
+  companyId: string,
+  year: number,
+  category: string,
+  periodType: string,
+  periodIndex?: number,
+): number {
   let sql = `SELECT COALESCE(SUM(amount),0) as s FROM cash_flow_lines
-    WHERE company_id = ? AND period_type = ? AND category = ? AND line_kind = 'detail'`;
-  const params: (string | number)[] = [companyId, periodType, category];
+    WHERE company_id = ? AND year = ? AND period_type = ? AND category = ? AND line_kind = 'detail'`;
+  const params: (string | number)[] = [companyId, year, periodType, category];
   if (periodIndex != null) {
     sql += ` AND period_index = ?`;
     params.push(periodIndex);
@@ -54,8 +60,8 @@ function sumDetails(companyId: string, category: string, periodType: string, per
 
   const totalKind = `total_${category}`;
   let sql2 = `SELECT COALESCE(SUM(amount),0) as s FROM cash_flow_lines
-    WHERE company_id = ? AND period_type = ? AND line_kind = ?`;
-  const params2: (string | number)[] = [companyId, periodType, totalKind];
+    WHERE company_id = ? AND year = ? AND period_type = ? AND line_kind = ?`;
+  const params2: (string | number)[] = [companyId, year, periodType, totalKind];
   if (periodIndex != null) {
     sql2 += ` AND period_index = ?`;
     params2.push(periodIndex);
@@ -64,6 +70,13 @@ function sumDetails(companyId: string, category: string, periodType: string, per
 }
 
 export function getCompanyYear(companyId: string): number {
+  const fromLines = db
+    .prepare(
+      `SELECT year FROM cash_flow_lines WHERE company_id = ? ORDER BY year DESC LIMIT 1`,
+    )
+    .get(companyId) as { year: number } | undefined;
+  if (fromLines?.year) return fromLines.year;
+
   const row = db
     .prepare(
       `SELECT year FROM import_jobs WHERE company_id = ? AND status = 'ok' ORDER BY created_at DESC LIMIT 1`,
@@ -72,35 +85,44 @@ export function getCompanyYear(companyId: string): number {
   return row?.year ?? new Date().getFullYear();
 }
 
-export function getKpis(companyId: string): DashboardKpis {
-  const year = getCompanyYear(companyId);
-  const inflow = sumDetails(companyId, 'A', 'year', 0);
+export function getCompanyYears(companyId: string): number[] {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT year FROM cash_flow_lines WHERE company_id = ? ORDER BY year DESC`,
+    )
+    .all(companyId) as { year: number }[];
+  if (rows.length) return rows.map((r) => r.year);
+  return [getCompanyYear(companyId)];
+}
+
+export function getKpis(companyId: string, year = getCompanyYear(companyId)): DashboardKpis {
+  const inflow = sumDetails(companyId, year, 'A', 'year', 0);
   let outflow = 0;
   for (const cat of OUTFLOW_ORDER) {
-    outflow += sumDetails(companyId, cat, 'year', 0);
+    outflow += sumDetails(companyId, year, cat, 'year', 0);
   }
 
   const netRow = db
     .prepare(
-      `SELECT amount FROM cash_flow_lines WHERE company_id = ? AND line_kind = 'net' AND period_type = 'year' LIMIT 1`,
+      `SELECT amount FROM cash_flow_lines WHERE company_id = ? AND year = ? AND line_kind = 'net' AND period_type = 'year' LIMIT 1`,
     )
-    .get(companyId) as { amount: number } | undefined;
+    .get(companyId, year) as { amount: number } | undefined;
 
   const balRow = db
     .prepare(
       `SELECT amount FROM cash_flow_lines
-       WHERE company_id = ? AND line_kind = 'balance' AND period_type = 'week'
+       WHERE company_id = ? AND year = ? AND line_kind = 'balance' AND period_type = 'week'
        ORDER BY period_index DESC LIMIT 1`,
     )
-    .get(companyId) as { amount: number } | undefined;
+    .get(companyId, year) as { amount: number } | undefined;
 
   const balMonth = db
     .prepare(
       `SELECT amount FROM cash_flow_lines
-       WHERE company_id = ? AND line_kind = 'balance' AND period_type = 'month'
+       WHERE company_id = ? AND year = ? AND line_kind = 'balance' AND period_type = 'month'
        ORDER BY period_index DESC LIMIT 1`,
     )
-    .get(companyId) as { amount: number } | undefined;
+    .get(companyId, year) as { amount: number } | undefined;
 
   return {
     totalInflow: inflow,
@@ -111,25 +133,24 @@ export function getKpis(companyId: string): DashboardKpis {
   };
 }
 
-export function getCategoryTotals(companyId: string): CategoryTotal[] {
+export function getCategoryTotals(companyId: string, year = getCompanyYear(companyId)): CategoryTotal[] {
   const result: CategoryTotal[] = [];
   for (const key of OUTFLOW_ORDER) {
     const meta = CATEGORY_META[key];
-    const yearly = sumDetails(companyId, key, 'year', 0);
-    // latest week with data or average-ish: sum of week amounts / count — use last 1 week sum of details
+    const yearly = sumDetails(companyId, year, key, 'year', 0);
     const weekMax = db
       .prepare(
-        `SELECT MAX(period_index) as m FROM cash_flow_lines WHERE company_id = ? AND period_type = 'week' AND line_kind = 'detail' AND amount != 0`,
+        `SELECT MAX(period_index) as m FROM cash_flow_lines WHERE company_id = ? AND year = ? AND period_type = 'week' AND line_kind = 'detail' AND amount != 0`,
       )
-      .get(companyId) as { m: number | null };
-    const weekly = weekMax?.m != null ? sumDetails(companyId, key, 'week', weekMax.m) : yearly / 52;
+      .get(companyId, year) as { m: number | null };
+    const weekly = weekMax?.m != null ? sumDetails(companyId, year, key, 'week', weekMax.m) : yearly / 52;
 
     const monthMax = db
       .prepare(
-        `SELECT MAX(period_index) as m FROM cash_flow_lines WHERE company_id = ? AND period_type = 'month' AND line_kind = 'detail' AND amount != 0`,
+        `SELECT MAX(period_index) as m FROM cash_flow_lines WHERE company_id = ? AND year = ? AND period_type = 'month' AND line_kind = 'detail' AND amount != 0`,
       )
-      .get(companyId) as { m: number | null };
-    const monthly = monthMax?.m != null ? sumDetails(companyId, key, 'month', monthMax.m) : yearly / 12;
+      .get(companyId, year) as { m: number | null };
+    const monthly = monthMax?.m != null ? sumDetails(companyId, year, key, 'month', monthMax.m) : yearly / 12;
 
     result.push({
       key,
@@ -143,23 +164,23 @@ export function getCategoryTotals(companyId: string): CategoryTotal[] {
   return result;
 }
 
-export function getMonthlySeries(companyId: string) {
+export function getMonthlySeries(companyId: string, year = getCompanyYear(companyId)) {
   return MONTH_LABELS.map((label, idx) => {
-    const inflow = sumDetails(companyId, 'A', 'month', idx);
+    const inflow = sumDetails(companyId, year, 'A', 'month', idx);
     let outflow = 0;
-    for (const cat of OUTFLOW_ORDER) outflow += sumDetails(companyId, cat, 'month', idx);
+    for (const cat of OUTFLOW_ORDER) outflow += sumDetails(companyId, year, cat, 'month', idx);
     return { month: label, monthIndex: idx, inflow, outflow, net: inflow - outflow };
   });
 }
 
-export function getWeeklyBalanceSeries(companyId: string) {
+export function getWeeklyBalanceSeries(companyId: string, year = getCompanyYear(companyId)) {
   const rows = db
     .prepare(
       `SELECT period_index, period_label, amount FROM cash_flow_lines
-       WHERE company_id = ? AND line_kind = 'balance' AND period_type = 'week'
+       WHERE company_id = ? AND year = ? AND line_kind = 'balance' AND period_type = 'week'
        ORDER BY period_index`,
     )
-    .all(companyId) as { period_index: number; period_label: string | null; amount: number }[];
+    .all(companyId, year) as { period_index: number; period_label: string | null; amount: number }[];
 
   if (rows.length) {
     return rows.map((r) => ({
@@ -169,19 +190,18 @@ export function getWeeklyBalanceSeries(companyId: string) {
     }));
   }
 
-  // synthesize from weekly net cumulative
   const weeks = db
     .prepare(
       `SELECT DISTINCT period_index, period_label FROM cash_flow_lines
-       WHERE company_id = ? AND period_type = 'week' ORDER BY period_index`,
+       WHERE company_id = ? AND year = ? AND period_type = 'week' ORDER BY period_index`,
     )
-    .all(companyId) as { period_index: number; period_label: string | null }[];
+    .all(companyId, year) as { period_index: number; period_label: string | null }[];
 
   let running = 0;
   return weeks.map((w) => {
-    const inflow = sumDetails(companyId, 'A', 'week', w.period_index);
+    const inflow = sumDetails(companyId, year, 'A', 'week', w.period_index);
     let outflow = 0;
-    for (const cat of OUTFLOW_ORDER) outflow += sumDetails(companyId, cat, 'week', w.period_index);
+    for (const cat of OUTFLOW_ORDER) outflow += sumDetails(companyId, year, cat, 'week', w.period_index);
     running += inflow - outflow;
     return {
       week: w.period_label || `H${w.period_index}`,
@@ -191,13 +211,14 @@ export function getWeeklyBalanceSeries(companyId: string) {
   });
 }
 
-export function getSubsidiaryComparison(parentId: string) {
+export function getSubsidiaryComparison(parentId: string, year?: number) {
   const subs = db
     .prepare(`SELECT id, name FROM companies WHERE parent_id = ? AND role = 'subsidiary' ORDER BY name`)
     .all(parentId) as { id: string; name: string }[];
 
   return subs.map((s) => {
-    const kpis = getKpis(s.id);
+    const y = year ?? getCompanyYear(s.id);
+    const kpis = getKpis(s.id, y);
     return {
       id: s.id,
       name: s.name,
@@ -206,8 +227,8 @@ export function getSubsidiaryComparison(parentId: string) {
   });
 }
 
-export function getConsolidatedDashboard(parentId: string) {
-  const comparison = getSubsidiaryComparison(parentId);
+export function getConsolidatedDashboard(parentId: string, year = new Date().getFullYear()) {
+  const comparison = getSubsidiaryComparison(parentId, year);
   const totals = comparison.reduce(
     (acc, c) => {
       acc.totalInflow += c.totalInflow;
@@ -223,8 +244,8 @@ export function getConsolidatedDashboard(parentId: string) {
     let inflow = 0;
     let outflow = 0;
     for (const s of comparison) {
-      inflow += sumDetails(s.id, 'A', 'month', idx);
-      for (const cat of OUTFLOW_ORDER) outflow += sumDetails(s.id, cat, 'month', idx);
+      inflow += sumDetails(s.id, year, 'A', 'month', idx);
+      for (const cat of OUTFLOW_ORDER) outflow += sumDetails(s.id, year, cat, 'month', idx);
     }
     return { month: label, monthIndex: idx, inflow, outflow, net: inflow - outflow };
   });
@@ -233,7 +254,7 @@ export function getConsolidatedDashboard(parentId: string) {
   for (const cat of OUTFLOW_ORDER) categoryMap[cat] = 0;
   for (const s of comparison) {
     for (const cat of OUTFLOW_ORDER) {
-      categoryMap[cat] += sumDetails(s.id, cat, 'year', 0);
+      categoryMap[cat] += sumDetails(s.id, year, cat, 'year', 0);
     }
   }
 
@@ -244,12 +265,21 @@ export function getConsolidatedDashboard(parentId: string) {
     yearly: categoryMap[key],
   }));
 
-  return { comparison, totals, monthly, categories, year: new Date().getFullYear() };
+  return { comparison, totals, monthly, categories, year };
 }
 
-export function companyHasData(companyId: string): boolean {
+export function companyHasData(companyId: string, year?: number): boolean {
+  if (year != null) {
+    const row = db
+      .prepare(`SELECT COUNT(*) as c FROM cash_flow_lines WHERE company_id = ? AND year = ?`)
+      .get(companyId, year) as { c: number };
+    return row.c > 0;
+  }
   const row = db
     .prepare(`SELECT COUNT(*) as c FROM cash_flow_lines WHERE company_id = ?`)
     .get(companyId) as { c: number };
   return row.c > 0;
 }
+
+// silence unused in case older callers
+void sumAmount;

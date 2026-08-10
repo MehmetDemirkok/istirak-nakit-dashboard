@@ -96,6 +96,70 @@ db.exec(`
   );
 `);
 
+migrateCashFlowSchema();
+
+function migrateCashFlowSchema() {
+  const importCols = db.prepare(`PRAGMA table_info(import_jobs)`).all() as { name: string }[];
+  if (!importCols.some((c) => c.name === 'month')) {
+    db.exec(`ALTER TABLE import_jobs ADD COLUMN month INTEGER`);
+  }
+
+  const tableSql = (
+    db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'cash_flow_lines'`).get() as
+      | { sql: string }
+      | undefined
+  )?.sql;
+
+  const hasYearUnique = !!tableSql?.includes('company_id, year, code');
+  const cflCols = db.prepare(`PRAGMA table_info(cash_flow_lines)`).all() as { name: string }[];
+  const hasYearCol = cflCols.some((c) => c.name === 'year');
+
+  if (hasYearUnique && hasYearCol) return;
+
+  if (!hasYearCol) {
+    db.exec(`ALTER TABLE cash_flow_lines ADD COLUMN year INTEGER`);
+  }
+
+  db.exec(`
+    UPDATE cash_flow_lines
+    SET year = COALESCE(
+      (SELECT year FROM import_jobs WHERE import_jobs.id = cash_flow_lines.import_id),
+      CAST(strftime('%Y', 'now') AS INTEGER)
+    )
+    WHERE year IS NULL
+  `);
+
+  db.exec(`
+    CREATE TABLE cash_flow_lines_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      import_id TEXT REFERENCES import_jobs(id) ON DELETE SET NULL,
+      code TEXT,
+      category TEXT NOT NULL,
+      label TEXT NOT NULL,
+      line_kind TEXT NOT NULL,
+      period_type TEXT NOT NULL CHECK(period_type IN ('week', 'month', 'year')),
+      period_index INTEGER NOT NULL,
+      period_label TEXT,
+      amount REAL NOT NULL DEFAULT 0,
+      year INTEGER NOT NULL,
+      UNIQUE(company_id, year, code, label, line_kind, period_type, period_index)
+    );
+
+    INSERT INTO cash_flow_lines_new
+      (company_id, import_id, code, category, label, line_kind, period_type, period_index, period_label, amount, year)
+    SELECT company_id, import_id, code, category, label, line_kind, period_type, period_index, period_label, amount,
+           COALESCE(year, CAST(strftime('%Y', 'now') AS INTEGER))
+    FROM cash_flow_lines;
+
+    DROP TABLE cash_flow_lines;
+    ALTER TABLE cash_flow_lines_new RENAME TO cash_flow_lines;
+    CREATE INDEX IF NOT EXISTS idx_cfl_company ON cash_flow_lines(company_id);
+    CREATE INDEX IF NOT EXISTS idx_cfl_category ON cash_flow_lines(company_id, category);
+    CREATE INDEX IF NOT EXISTS idx_cfl_year ON cash_flow_lines(company_id, year);
+  `);
+}
+
 export type CompanyRole = 'parent' | 'subsidiary';
 
 export interface Company {

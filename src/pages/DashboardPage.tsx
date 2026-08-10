@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -17,7 +19,42 @@ import {
 } from 'recharts';
 import { api, formatMoney, type Company } from '../api';
 
-const COLORS = ['#0B4DA8', '#E87722', '#0D9488', '#6366F1', '#E11D48', '#CA8A04', '#64748B', '#0891B2', '#7C3AED'];
+const IN = '#0B4DA8';
+const OUT = '#E87722';
+const NET = '#0D9488';
+const MUTED = '#94A3B8';
+const GRID = '#E8EEF5';
+const CAT_COLORS = ['#0B4DA8', '#E87722', '#0D9488', '#475569', '#B45309', '#0369A1', '#7C2D12', '#334155', '#0F766E'];
+
+const MONTHS = [
+  'Ocak',
+  'Şubat',
+  'Mart',
+  'Nisan',
+  'Mayıs',
+  'Haziran',
+  'Temmuz',
+  'Ağustos',
+  'Eylül',
+  'Ekim',
+  'Kasım',
+  'Aralık',
+];
+
+const MONTHS_ASCII = [
+  'Ocak',
+  'Subat',
+  'Mart',
+  'Nisan',
+  'Mayis',
+  'Haziran',
+  'Temmuz',
+  'Agustos',
+  'Eylul',
+  'Ekim',
+  'Kasim',
+  'Aralik',
+];
 
 export default function DashboardPage({ companies }: { companies: Company[] }) {
   const [params, setParams] = useSearchParams();
@@ -31,39 +68,100 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const yearFromUrl = params.get('year');
+  const monthFromUrl = params.get('month');
+  const [periodYear, setPeriodYear] = useState<number>(
+    yearFromUrl ? Number(yearFromUrl) : new Date().getFullYear(),
+  );
+  const [periodMonth, setPeriodMonth] = useState<number | 'all'>(
+    monthFromUrl && monthFromUrl !== 'all' ? Number(monthFromUrl) : new Date().getMonth(),
+  );
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [periodReady, setPeriodReady] = useState(!!yearFromUrl);
+
   useEffect(() => {
     if (params.get('company')) setCompanyId(params.get('company')!);
     else if (!companyId && defaultId) setCompanyId(defaultId);
   }, [params, defaultId]);
 
   useEffect(() => {
-    if (!companyId) {
+    if (yearFromUrl) setPeriodYear(Number(yearFromUrl));
+    if (monthFromUrl) {
+      setPeriodMonth(monthFromUrl === 'all' ? 'all' : Number(monthFromUrl));
+      setPeriodReady(true);
+    }
+  }, [yearFromUrl, monthFromUrl]);
+
+  useEffect(() => {
+    if (!companyId || yearFromUrl) {
+      if (yearFromUrl) setPeriodReady(true);
+      return;
+    }
+    let cancelled = false;
+    api
+      .listPeriods(companyId)
+      .then(({ latest }) => {
+        if (cancelled) return;
+        if (latest) {
+          setPeriodYear(latest.year);
+          setPeriodMonth(latest.month);
+          setParams({
+            company: companyId,
+            year: String(latest.year),
+            month: String(latest.month),
+          });
+        }
+        setPeriodReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setPeriodReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId || !periodReady) {
       setData(null);
       return;
     }
+    let cancelled = false;
     setBusy(true);
     setErr(null);
     api
-      .dashboard(companyId)
-      .then(setData)
-      .catch((e) => setErr(e.message))
-      .finally(() => setBusy(false));
-  }, [companyId]);
-
-  const [exportYear, setExportYear] = useState<number>(new Date().getFullYear());
-  const [exportMonth, setExportMonth] = useState<number | 'all'>('all');
-  const [exporting, setExporting] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (data?.kpis?.year) setExportYear(data.kpis.year);
-  }, [data?.kpis?.year]);
+      .dashboard(companyId, { year: periodYear, month: periodMonth })
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, periodYear, periodMonth, periodReady]);
 
   const selected = companies.find((c) => c.id === companyId);
+  const periodTitle =
+    periodMonth === 'all' ? `${periodYear} Yıllık` : `${MONTHS[periodMonth]} ${periodYear}`;
+
+  const syncParams = (next: { company?: string; year?: number; month?: number | 'all' }) => {
+    setParams({
+      company: next.company ?? companyId,
+      year: String(next.year ?? periodYear),
+      month: String(next.month ?? periodMonth),
+    });
+  };
 
   const periodFileLabel =
-    exportMonth === 'all'
-      ? `${exportYear}-Yillik`
-      : `${exportYear}-${['Ocak','Subat','Mart','Nisan','Mayis','Haziran','Temmuz','Agustos','Eylul','Ekim','Kasim','Aralik'][exportMonth]}`;
+    periodMonth === 'all'
+      ? `${periodYear}-Yillik`
+      : `${periodYear}-${MONTHS_ASCII[periodMonth]}`;
 
   const download = async (format: 'pptx' | 'pdf' | 'xlsx') => {
     if (!selected || selected.role === 'parent') return;
@@ -74,7 +172,7 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
       await api.downloadExport(
         selected.id,
         format,
-        { year: exportYear, month: exportMonth },
+        { year: periodYear, month: periodMonth },
         `${safe}-${periodFileLabel}.${format === 'xlsx' ? 'xlsx' : format}`,
       );
     } catch (e) {
@@ -84,357 +182,827 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
     }
   };
 
-  const MONTHS = [
-    'Ocak',
-    'Şubat',
-    'Mart',
-    'Nisan',
-    'Mayıs',
-    'Haziran',
-    'Temmuz',
-    'Ağustos',
-    'Eylül',
-    'Ekim',
-    'Kasım',
-    'Aralık',
-  ];
+  const changeCompany = (id: string) => {
+    setCompanyId(id);
+    setPeriodReady(false);
+    api
+      .listPeriods(id)
+      .then(({ latest }) => {
+        if (latest) {
+          setPeriodYear(latest.year);
+          setPeriodMonth(latest.month);
+          setParams({
+            company: id,
+            year: String(latest.year),
+            month: String(latest.month),
+          });
+        } else {
+          setParams({
+            company: id,
+            year: String(periodYear),
+            month: String(periodMonth),
+          });
+        }
+        setPeriodReady(true);
+      })
+      .catch(() => {
+        setParams({ company: id, year: String(periodYear), month: String(periodMonth) });
+        setPeriodReady(true);
+      });
+  };
 
+  const yearOptions = useMemo(() => {
+    const fromPeriods = (data?.periods || []).map((p: { year: number }) => p.year);
+    const base = data?.dataYear || data?.year || periodYear;
+    return Array.from(
+      new Set([...fromPeriods, base - 1, base, base + 1, periodYear, 2025, 2026]),
+    ).sort((a, b) => a - b);
+  }, [data, periodYear]);
+
+  const loadedMonths = useMemo(() => {
+    return new Set<number>(
+      (data?.periods || [])
+        .filter((p: { year: number }) => p.year === periodYear)
+        .map((p: { month: number }) => p.month),
+    );
+  }, [data, periodYear]);
+
+  const flowSeries = useMemo(() => {
+    if (!data) return [];
+    if (periodMonth === 'all') {
+      return (data.monthly || []).map((m: any) => ({
+        label: String(m.month).slice(0, 3),
+        full: m.month,
+        inflow: m.inflow || 0,
+        outflow: m.outflow || 0,
+        net: m.net || 0,
+        selected: !!m.selected,
+        monthIndex: m.monthIndex,
+      }));
+    }
+    return (data.weekly || []).map((w: any) => ({
+      label: w.week,
+      full: w.week,
+      inflow: w.inflow || 0,
+      outflow: w.outflow || 0,
+      net: w.net || 0,
+      balance: w.balance || 0,
+      selected: true,
+    }));
+  }, [data, periodMonth]);
 
   const pieData = useMemo(() => {
     const cats = data?.categories || [];
-    return cats
-      .filter((c: any) => (c.yearly ?? 0) > 0)
-      .map((c: any) => ({ name: c.shortLabel, value: c.yearly }));
+    const rows = cats
+      .filter((c: any) => (c.period ?? c.yearly ?? 0) > 0)
+      .map((c: any) => ({
+        key: c.key,
+        name: c.shortLabel,
+        value: c.period ?? c.yearly,
+      }))
+      .sort((a: any, b: any) => b.value - a.value);
+    const total = rows.reduce((s: number, r: any) => s + r.value, 0) || 1;
+    return rows.map((r: any) => ({ ...r, pct: (r.value / total) * 100 }));
   }, [data]);
+
+  const categoryBars = useMemo(() => {
+    const cats = data?.categories || [];
+    return [...cats]
+      .map((c: any) => ({
+        key: c.key,
+        name: c.shortLabel,
+        period: c.period ?? c.monthly ?? 0,
+        yearly: c.yearly ?? 0,
+        monthly: c.monthly ?? 0,
+      }))
+      .sort((a, b) => b.period - a.period);
+  }, [data]);
+
+  const insights = useMemo(() => {
+    if (!data?.kpis && !data?.totals) return null;
+    const k = data.type === 'consolidated' ? data.totals : data.kpis;
+    const inflow = k.totalInflow || 0;
+    const outflow = k.totalOutflow || 0;
+    const net = k.net ?? inflow - outflow;
+    const coverage = outflow > 0 ? inflow / outflow : inflow > 0 ? 99 : 0;
+    const netRate = inflow > 0 ? (net / inflow) * 100 : 0;
+    const top = pieData[0];
+    const monthsFilled = loadedMonths.size;
+    return { inflow, outflow, net, coverage, netRate, top, monthsFilled, balance: k.balance ?? 0 };
+  }, [data, pieData, loadedMonths]);
+
+  const yearCompare = useMemo(() => data?.monthly || [], [data]);
 
   if (companies.length === 0) {
     return (
-      <>
-        <div className="topbar">
+      <div className="dash">
+        <header className="dash-head">
           <div>
+            <p className="dash-kicker">Nakit akış takibi</p>
             <h2>Dashboard</h2>
-            <p>Başlamak için şirket ekleyin ve Excel yükleyin.</p>
+            <p className="dash-sub">Başlamak için şirket ekleyin ve Excel yükleyin.</p>
           </div>
+        </header>
+        <div className="card panel empty">
+          <Link to="/companies" className="btn btn-primary">
+            Şirketler’e git
+          </Link>
         </div>
-        <div className="card panel empty">Şirketler menüsünden ana şirket ve iştirak oluşturun.</div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="topbar">
-        <div>
+    <div className="dash">
+      <header className="dash-head">
+        <div className="dash-head-main">
+          <p className="dash-kicker">Nakit akış takibi</p>
           <h2>
-            {data?.type === 'consolidated'
-              ? 'Konsolide Dashboard'
-              : selected?.name || 'Dashboard'}
+            {data?.type === 'consolidated' ? 'Konsolide görünüm' : selected?.name || 'Dashboard'}
           </h2>
-          <p>
-            {data?.type === 'consolidated'
-              ? 'Tüm iştiraklerin nakit akış özeti'
-              : 'İştirak nakit giriş/çıkış performansı'}
+          <p className="dash-sub">
+            <span className="dash-period-chip">{data?.periodLabel || periodTitle}</span>
+            {data?.type === 'consolidated' ? ' · tüm iştirakler' : ' · giriş / çıkış / bakiye'}
+            {busy ? ' · yükleniyor…' : ''}
           </p>
         </div>
-        <div className="toolbar">
+
+        <div className="dash-controls">
           <span className="badge live">LOKAL VERİ</span>
-          <select
+          <DownSelect
+            ariaLabel="Şirket"
             value={companyId}
-            onChange={(e) => {
-              setCompanyId(e.target.value);
-              setParams({ company: e.target.value });
+            options={[
+              ...(parent ? [{ value: parent.id, label: `Konsolide — ${parent.name}` }] : []),
+              ...subsidiaries.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+            onChange={changeCompany}
+          />
+          <DownSelect
+            ariaLabel="Yıl"
+            value={String(periodYear)}
+            options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
+            onChange={(v) => {
+              const y = Number(v);
+              setPeriodYear(y);
+              syncParams({ year: y });
             }}
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: '0.45rem 0.7rem',
-              background: '#fff',
+          />
+          <DownSelect
+            ariaLabel="Ay"
+            value={periodMonth === 'all' ? 'all' : String(periodMonth)}
+            options={[
+              { value: 'all', label: 'Tüm yıl' },
+              ...MONTHS.map((m, i) => ({
+                value: String(i),
+                label: `${m}${loadedMonths.has(i) ? ' ●' : ''}`,
+              })),
+            ]}
+            onChange={(v) => {
+              const m = v === 'all' ? 'all' : Number(v);
+              setPeriodMonth(m);
+              syncParams({ month: m });
             }}
-          >
-            {parent && <option value={parent.id}>Konsolide — {parent.name}</option>}
-            {subsidiaries.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          />
+          {selected?.role === 'subsidiary' && data?.hasData && (
+            <div className="dash-export">
+              <button className="btn btn-accent" type="button" disabled={!!exporting} onClick={() => download('pptx')}>
+                {exporting === 'pptx' ? '…' : 'PPTX'}
+              </button>
+              <button className="btn btn-primary" type="button" disabled={!!exporting} onClick={() => download('pdf')}>
+                {exporting === 'pdf' ? '…' : 'PDF'}
+              </button>
+              <button className="btn btn-ghost" type="button" disabled={!!exporting} onClick={() => download('xlsx')}>
+                {exporting === 'xlsx' ? '…' : 'Excel'}
+              </button>
+            </div>
+          )}
         </div>
+      </header>
+
+      {err && <div className="alert err">{err}</div>}
+
+      <div className="dash-months" role="tablist" aria-label="Ay seçimi">
+        <button
+          type="button"
+          className={`dash-month ${periodMonth === 'all' ? 'active' : ''}`}
+          onClick={() => {
+            setPeriodMonth('all');
+            syncParams({ month: 'all' });
+          }}
+        >
+          Yıl
+        </button>
+        {MONTHS.map((m, i) => (
+          <button
+            key={m}
+            type="button"
+            className={`dash-month ${periodMonth === i ? 'active' : ''} ${loadedMonths.has(i) ? 'has-data' : ''}`}
+            onClick={() => {
+              setPeriodMonth(i);
+              syncParams({ month: i });
+            }}
+            title={loadedMonths.has(i) ? 'Veri var' : 'Veri yok / boş'}
+          >
+            {m.slice(0, 3)}
+          </button>
+        ))}
       </div>
 
-      {selected?.role === 'subsidiary' && data?.hasData && (
-        <section className="card panel" style={{ marginBottom: '1rem' }}>
-          <h3>Dönemsel Rapor Çıktısı</h3>
-          <p style={{ margin: '0 0 0.85rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
-            Örn. <strong>{selected.name} · Ağustos {exportYear}</strong> — PPTX, PDF veya Excel indirin.
+      {data?.type === 'subsidiary' && !data.hasData && (
+        <div className="card panel empty">
+          Bu iştirak için henüz Excel yok.{' '}
+          <Link to="/import" className="btn btn-primary" style={{ marginLeft: 8 }}>
+            Excel Yükle
+          </Link>
+        </div>
+      )}
+
+      {data?.type === 'subsidiary' && data.hasData && !data.hasPeriodData && (
+        <div className="card panel empty">
+          <p>
+            <strong>{periodYear}</strong> için veri bulunamadı.
           </p>
-          <div className="toolbar">
-            <label className="field" style={{ margin: 0 }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Yıl</span>
-              <select
-                value={exportYear}
-                onChange={(e) => setExportYear(Number(e.target.value))}
-                style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.45rem 0.7rem' }}
-              >
-                {[exportYear - 1, exportYear, exportYear + 1]
-                  .filter((y, i, a) => a.indexOf(y) === i)
-                  .map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                <option value={2025}>2025</option>
-                <option value={2026}>2026</option>
-              </select>
-            </label>
-            <label className="field" style={{ margin: 0 }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Ay</span>
-              <select
-                value={exportMonth === 'all' ? 'all' : String(exportMonth)}
-                onChange={(e) =>
-                  setExportMonth(e.target.value === 'all' ? 'all' : Number(e.target.value))
-                }
-                style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.45rem 0.7rem' }}
-              >
-                <option value="all">Tüm yıl</option>
-                {MONTHS.map((m, i) => (
-                  <option key={m} value={i}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="btn btn-accent"
-              type="button"
-              disabled={!!exporting}
-              onClick={() => download('pptx')}
-            >
-              {exporting === 'pptx' ? '…' : 'PPTX'}
-            </button>
+          {data.latest && (
             <button
               className="btn btn-primary"
               type="button"
-              disabled={!!exporting}
-              onClick={() => download('pdf')}
+              style={{ marginTop: '0.75rem' }}
+              onClick={() => {
+                setPeriodYear(data.latest.year);
+                setPeriodMonth(data.latest.month);
+                syncParams({ year: data.latest.year, month: data.latest.month });
+              }}
             >
-              {exporting === 'pdf' ? '…' : 'PDF'}
+              Son yükleme: {MONTHS[data.latest.month]} {data.latest.year}
             </button>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              disabled={!!exporting}
-              onClick={() => download('xlsx')}
-            >
-              {exporting === 'xlsx' ? '…' : 'Excel'}
-            </button>
-          </div>
-        </section>
+          )}
+        </div>
       )}
 
-      {err && <div className="alert err">{err}</div>}
-      {busy && <div className="alert warn">Yükleniyor…</div>}
-
-      {data?.type === 'subsidiary' && !data.hasData && (
-        <div className="card panel empty">Bu iştirak için henüz Excel yüklenmedi. Excel Yükle ekranına gidin.</div>
-      )}
-
-      {data?.type === 'subsidiary' && data.hasData && (
+      {data?.type === 'subsidiary' && data.hasData && data.hasPeriodData && insights && (
         <>
-          <div className="grid-kpi">
-            <Kpi label="Toplam Gelir" value={formatMoney(data.kpis.totalInflow)} accent="#0B4DA8" />
-            <Kpi label="Toplam Gider" value={formatMoney(data.kpis.totalOutflow)} accent="#E87722" />
-            <Kpi label="Net Nakit" value={formatMoney(data.kpis.net)} accent="#374556" />
-            <Kpi label="Nakit Bakiye" value={formatMoney(data.kpis.balance)} accent="#0D9488" />
+          <div className="dash-kpi-grid">
+            <KpiCard
+              label="Gelir"
+              value={formatMoney(insights.inflow)}
+              hint={periodTitle}
+              tone="in"
+            />
+            <KpiCard
+              label="Gider"
+              value={formatMoney(insights.outflow)}
+              hint={periodTitle}
+              tone="out"
+            />
+            <KpiCard
+              label="Net nakit"
+              value={formatMoney(insights.net)}
+              hint={`${insights.netRate >= 0 ? '+' : ''}${insights.netRate.toFixed(1)}% marj`}
+              tone={insights.net >= 0 ? 'net' : 'out'}
+            />
+            <KpiCard
+              label="Bakiye"
+              value={formatMoney(insights.balance)}
+              hint={`Karşılama ${insights.coverage.toFixed(2)}x`}
+              tone="bal"
+            />
           </div>
 
-          <div className="grid-charts">
-            <section className="card panel">
-              <h3>Aylık Nakit Giriş / Çıkış ({data.kpis.year})</h3>
-              <div style={{ width: '100%', height: 280 }}>
-                <ResponsiveContainer>
-                  <BarChart data={data.monthly}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="month" tickFormatter={(v) => String(v).slice(0, 3)} fontSize={11} />
-                    <YAxis fontSize={11} tickFormatter={(v) => compact(v)} />
-                    <Tooltip formatter={(v: number) => formatMoney(v)} />
-                    <Legend />
-                    <Bar dataKey="inflow" name="Giriş" fill="#0B4DA8" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="outflow" name="Çıkış" fill="#E87722" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
-
-            <section className="card panel">
-              <h3>Gider Dağılımı</h3>
-              <div style={{ width: '100%', height: 280 }}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={2}>
-                      {pieData.map((_: any, i: number) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => formatMoney(v)} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
+          <div className="dash-insight-row">
+            <div className="dash-insight">
+              <span className="dash-insight-label">En büyük gider</span>
+              <strong>{insights.top ? insights.top.name : '—'}</strong>
+              <span>{insights.top ? `${insights.top.pct.toFixed(0)}% · ${formatMoney(insights.top.value)}` : 'Veri yok'}</span>
+            </div>
+            <div className="dash-insight">
+              <span className="dash-insight-label">Dönem durumu</span>
+              <strong>{insights.net >= 0 ? 'Pozitif nakit' : 'Negatif nakit'}</strong>
+              <span>
+                Giriş {formatMoney(insights.inflow)} / Çıkış {formatMoney(insights.outflow)}
+              </span>
+            </div>
+            <div className="dash-insight">
+              <span className="dash-insight-label">Yıl doluluğu</span>
+              <strong>
+                {insights.monthsFilled}/12 ay
+              </strong>
+              <span>{periodYear} içinde veri olan ay sayısı</span>
+            </div>
           </div>
 
-          <div className="grid-2">
-            <section className="card panel">
-              <h3>Haftalık Nakit Bakiye</h3>
-              <div style={{ width: '100%', height: 260 }}>
+          <div className="dash-main-grid">
+            <section className="card dash-panel dash-panel-wide">
+              <div className="dash-panel-head">
+                <div>
+                  <h3>
+                    {periodMonth === 'all'
+                      ? `Aylık nakit akışı · ${periodYear}`
+                      : `Haftalık nakit akışı · ${MONTHS[periodMonth]}`}
+                  </h3>
+                  <p>Giriş, çıkış ve net hareket</p>
+                </div>
+              </div>
+              <div className="dash-chart tall">
                 <ResponsiveContainer>
-                  <LineChart data={data.weekly.slice(0, 26)}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="week" hide={data.weekly.length > 16} fontSize={10} />
-                    <YAxis fontSize={11} tickFormatter={(v) => compact(v)} />
-                    <Tooltip formatter={(v: number) => formatMoney(v)} />
-                    <Line type="monotone" dataKey="balance" name="Bakiye" stroke="#0B4DA8" strokeWidth={2.5} dot={false} />
-                  </LineChart>
+                  <ComposedChart data={flowSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={compact} width={52} />
+                    <Tooltip content={<MoneyTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="inflow" name="Giriş" fill={IN} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="outflow" name="Çıkış" fill={OUT} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Line type="monotone" dataKey="net" name="Net" stroke={NET} strokeWidth={2.25} dot={false} />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
+              {periodMonth !== 'all' && flowSeries.length === 0 && (
+                <p className="dash-empty-note">Bu ay için haftalık satır bulunamadı.</p>
+              )}
             </section>
 
-            <section className="card panel">
-              <h3>Kategori Özeti (Yıllık)</h3>
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>Kalem</th>
-                    <th>Haftalık*</th>
-                    <th>Aylık*</th>
-                    <th>Yıllık</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.categories.map((c: any) => (
-                    <tr key={c.key}>
-                      <td>{c.shortLabel}</td>
-                      <td>{formatMoney(c.weekly)}</td>
-                      <td>{formatMoney(c.monthly)}</td>
-                      <td>{formatMoney(c.yearly)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.5rem' }}>
-                * Son dolu dönem; yıllık toplam detay satırlarından.
-              </p>
-            </section>
-          </div>
-        </>
-      )}
-
-      {data?.type === 'consolidated' && (
-        <>
-          <div className="grid-kpi">
-            <Kpi label="Konsolide Gelir" value={formatMoney(data.totals.totalInflow)} accent="#0B4DA8" />
-            <Kpi label="Konsolide Gider" value={formatMoney(data.totals.totalOutflow)} accent="#E87722" />
-            <Kpi label="Konsolide Net" value={formatMoney(data.totals.net)} accent="#374556" />
-            <Kpi label="Toplam Bakiye" value={formatMoney(data.totals.balance)} accent="#0D9488" />
-          </div>
-
-          <div className="grid-charts">
-            <section className="card panel">
-              <h3>Konsolide Aylık Giriş / Çıkış</h3>
-              <div style={{ width: '100%', height: 280 }}>
-                <ResponsiveContainer>
-                  <BarChart data={data.monthly}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="month" tickFormatter={(v) => String(v).slice(0, 3)} fontSize={11} />
-                    <YAxis fontSize={11} tickFormatter={(v) => compact(v)} />
-                    <Tooltip formatter={(v: number) => formatMoney(v)} />
-                    <Legend />
-                    <Bar dataKey="inflow" name="Giriş" fill="#0B4DA8" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="outflow" name="Çıkış" fill="#E87722" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            <section className="card dash-panel">
+              <div className="dash-panel-head">
+                <div>
+                  <h3>Gider dağılımı</h3>
+                  <p>{periodTitle}</p>
+                </div>
               </div>
-            </section>
-            <section className="card panel">
-              <h3>Konsolide Gider Dağılımı</h3>
-              <div style={{ width: '100%', height: 280 }}>
+              <div className="dash-chart">
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie
-                      data={data.categories.filter((c: any) => c.yearly > 0).map((c: any) => ({
-                        name: c.shortLabel,
-                        value: c.yearly,
-                      }))}
+                      data={pieData}
                       dataKey="value"
                       nameKey="name"
-                      innerRadius={55}
-                      outerRadius={95}
+                      innerRadius={58}
+                      outerRadius={88}
+                      paddingAngle={2}
+                      stroke="#fff"
+                      strokeWidth={2}
                     >
-                      {data.categories.map((_: any, i: number) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      {pieData.map((_: any, i: number) => (
+                        <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: number) => formatMoney(v)} />
-                    <Legend />
+                    <Tooltip content={<MoneyTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
+              </div>
+              <ul className="dash-pie-legend">
+                {pieData.slice(0, 6).map((row: any, i: number) => (
+                  <li key={row.key || row.name}>
+                    <span className="swatch" style={{ background: CAT_COLORS[i % CAT_COLORS.length] }} />
+                    <span className="name">{row.name}</span>
+                    <span className="pct">{row.pct.toFixed(0)}%</span>
+                    <span className="amt">{formatMoney(row.value)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+
+          <div className="dash-secondary-grid">
+            <section className="card dash-panel">
+              <div className="dash-panel-head">
+                <div>
+                  <h3>
+                    {periodMonth === 'all' ? 'Haftalık bakiye eğrisi' : `${MONTHS[periodMonth]} bakiye`}
+                  </h3>
+                  <p>Dönem içi nakit pozisyonu</p>
+                </div>
+              </div>
+              <div className="dash-chart">
+                <ResponsiveContainer>
+                  <AreaChart data={data.weekly || []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="balFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={IN} stopOpacity={0.28} />
+                        <stop offset="100%" stopColor={IN} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke={GRID} vertical={false} />
+                    <XAxis
+                      dataKey="week"
+                      hide={(data.weekly || []).length > 18}
+                      tick={{ fill: '#64748B', fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={compact} width={52} />
+                    <Tooltip content={<MoneyTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="balance"
+                      name="Bakiye"
+                      stroke={IN}
+                      strokeWidth={2.25}
+                      fill="url(#balFill)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="card dash-panel">
+              <div className="dash-panel-head">
+                <div>
+                  <h3>Kategori detayı</h3>
+                  <p>Dönem tutarlarına göre sıralı</p>
+                </div>
+              </div>
+              <div className="dash-cat-list">
+                {categoryBars.map((c, i) => {
+                  const max = categoryBars[0]?.period || 1;
+                  const width = Math.max(2, Math.min(100, (Math.abs(c.period) / Math.abs(max || 1)) * 100));
+                  return (
+                    <div key={c.key} className="dash-cat-row">
+                      <div className="dash-cat-meta">
+                        <span className="dash-cat-name">
+                          <i style={{ background: CAT_COLORS[i % CAT_COLORS.length] }} />
+                          {c.name}
+                        </span>
+                        <span className="dash-cat-val">{formatMoney(c.period)}</span>
+                      </div>
+                      <div className="dash-cat-bar">
+                        <span style={{ width: `${width}%`, background: CAT_COLORS[i % CAT_COLORS.length] }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           </div>
 
-          <section className="card panel">
-            <h3>İştirak Karşılaştırma</h3>
-            {data.comparison.length === 0 ? (
-              <div className="empty">İştirak verisi yok.</div>
-            ) : (
-              <table className="data">
+          {periodMonth !== 'all' && (
+            <section className="card dash-panel" style={{ marginTop: '1rem' }}>
+              <div className="dash-panel-head">
+                <div>
+                  <h3>Yıl içi karşılaştırma · {periodYear}</h3>
+                  <p>Seçili ay vurgulu; diğer aylara tıklayarak geçebilirsiniz</p>
+                </div>
+              </div>
+              <div className="dash-chart mid">
+                <ResponsiveContainer>
+                  <BarChart
+                    data={yearCompare}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                    onClick={(state: any) => {
+                      const idx = state?.activePayload?.[0]?.payload?.monthIndex;
+                      if (typeof idx === 'number') {
+                        setPeriodMonth(idx);
+                        syncParams({ month: idx });
+                      }
+                    }}
+                  >
+                    <CartesianGrid stroke={GRID} vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(v) => String(v).slice(0, 3)}
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={compact} width={52} />
+                    <Tooltip content={<MoneyTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="inflow" name="Giriş" radius={[3, 3, 0, 0]} maxBarSize={22} cursor="pointer">
+                      {yearCompare.map((row: any, i: number) => (
+                        <Cell key={i} fill={row.selected ? IN : '#B7CFE8'} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="outflow" name="Çıkış" radius={[3, 3, 0, 0]} maxBarSize={22} cursor="pointer">
+                      {yearCompare.map((row: any, i: number) => (
+                        <Cell key={i} fill={row.selected ? OUT : '#F3D0B3'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          <section className="card dash-panel" style={{ marginTop: '1rem' }}>
+            <div className="dash-panel-head">
+              <div>
+                <h3>Kalem tablosu</h3>
+                <p>Dönem / aylık / yıllık özet</p>
+              </div>
+            </div>
+            <div className="dash-table-wrap">
+              <table className="data dash-table">
                 <thead>
                   <tr>
-                    <th>İştirak</th>
-                    <th>Gelir</th>
-                    <th>Gider</th>
-                    <th>Net</th>
-                    <th>Bakiye</th>
-                    <th></th>
+                    <th>Kalem</th>
+                    <th>Dönem</th>
+                    <th>Aylık</th>
+                    <th>Yıllık</th>
+                    <th>Pay</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.comparison.map((row: any) => (
-                    <tr key={row.id}>
-                      <td>{row.name}</td>
-                      <td>{formatMoney(row.totalInflow)}</td>
-                      <td>{formatMoney(row.totalOutflow)}</td>
-                      <td>{formatMoney(row.net)}</td>
-                      <td>{formatMoney(row.balance)}</td>
-                      <td>
-                        <button
-                          className="btn btn-ghost"
-                          type="button"
-                          onClick={() => {
-                            setCompanyId(row.id);
-                            setParams({ company: row.id });
-                          }}
-                        >
-                          Detay
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {categoryBars.map((c, i) => {
+                    const share =
+                      insights.outflow > 0 ? ((c.period / insights.outflow) * 100).toFixed(1) : '0.0';
+                    return (
+                      <tr key={c.key}>
+                        <td>
+                          <span className="dash-table-cat">
+                            <i style={{ background: CAT_COLORS[i % CAT_COLORS.length] }} />
+                            {c.name}
+                          </span>
+                        </td>
+                        <td>{formatMoney(c.period)}</td>
+                        <td>{formatMoney(c.monthly)}</td>
+                        <td>{formatMoney(c.yearly)}</td>
+                        <td>{share}%</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      {data?.type === 'consolidated' && insights && (
+        <>
+          <div className="dash-kpi-grid">
+            <KpiCard label="Konsolide gelir" value={formatMoney(insights.inflow)} hint={periodTitle} tone="in" />
+            <KpiCard label="Konsolide gider" value={formatMoney(insights.outflow)} hint={periodTitle} tone="out" />
+            <KpiCard
+              label="Konsolide net"
+              value={formatMoney(insights.net)}
+              hint={`${insights.netRate >= 0 ? '+' : ''}${insights.netRate.toFixed(1)}%`}
+              tone={insights.net >= 0 ? 'net' : 'out'}
+            />
+            <KpiCard label="Toplam bakiye" value={formatMoney(insights.balance)} hint="Tüm iştirakler" tone="bal" />
+          </div>
+
+          <div className="dash-main-grid">
+            <section className="card dash-panel dash-panel-wide">
+              <div className="dash-panel-head">
+                <div>
+                  <h3>Konsolide aylık akış</h3>
+                  <p>{periodYear} · iştirak toplamı</p>
+                </div>
+              </div>
+              <div className="dash-chart tall">
+                <ResponsiveContainer>
+                  <ComposedChart data={data.monthly || []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID} vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(v) => String(v).slice(0, 3)}
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={compact} width={52} />
+                    <Tooltip content={<MoneyTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="inflow" name="Giriş" radius={[4, 4, 0, 0]} maxBarSize={26}>
+                      {(data.monthly || []).map((row: any, i: number) => (
+                        <Cell key={i} fill={periodMonth === 'all' || row.selected ? IN : '#B7CFE8'} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="outflow" name="Çıkış" radius={[4, 4, 0, 0]} maxBarSize={26}>
+                      {(data.monthly || []).map((row: any, i: number) => (
+                        <Cell key={i} fill={periodMonth === 'all' || row.selected ? OUT : '#F3D0B3'} />
+                      ))}
+                    </Bar>
+                    <Line type="monotone" dataKey="net" name="Net" stroke={NET} strokeWidth={2.25} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="card dash-panel">
+              <div className="dash-panel-head">
+                <div>
+                  <h3>Konsolide gider</h3>
+                  <p>{periodTitle}</p>
+                </div>
+              </div>
+              <div className="dash-chart">
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={58}
+                      outerRadius={88}
+                      paddingAngle={2}
+                      stroke="#fff"
+                      strokeWidth={2}
+                    >
+                      {pieData.map((_: any, i: number) => (
+                        <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<MoneyTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="dash-pie-legend">
+                {pieData.slice(0, 6).map((row: any, i: number) => (
+                  <li key={row.key || row.name}>
+                    <span className="swatch" style={{ background: CAT_COLORS[i % CAT_COLORS.length] }} />
+                    <span className="name">{row.name}</span>
+                    <span className="pct">{row.pct.toFixed(0)}%</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+
+          <section className="card dash-panel" style={{ marginTop: '1rem' }}>
+            <div className="dash-panel-head">
+              <div>
+                <h3>İştirak karşılaştırma</h3>
+                <p>{periodTitle} · net sıralı</p>
+              </div>
+            </div>
+            {(data.comparison || []).length === 0 ? (
+              <div className="empty">İştirak verisi yok.</div>
+            ) : (
+              <>
+                <div className="dash-chart mid" style={{ marginBottom: '1rem' }}>
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={[...(data.comparison || [])].sort(
+                        (a: any, b: any) => (b.net || 0) - (a.net || 0),
+                      )}
+                      layout="vertical"
+                      margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                    >
+                      <CartesianGrid stroke={GRID} horizontal={false} />
+                      <XAxis type="number" tickFormatter={compact} tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={120}
+                        tick={{ fill: '#374556', fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip content={<MoneyTooltip />} />
+                      <Bar dataKey="totalInflow" name="Gelir" fill={IN} radius={[0, 4, 4, 0]} barSize={10} />
+                      <Bar dataKey="totalOutflow" name="Gider" fill={OUT} radius={[0, 4, 4, 0]} barSize={10} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="dash-table-wrap">
+                  <table className="data dash-table">
+                    <thead>
+                      <tr>
+                        <th>İştirak</th>
+                        <th>Gelir</th>
+                        <th>Gider</th>
+                        <th>Net</th>
+                        <th>Bakiye</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.comparison.map((row: any) => (
+                        <tr key={row.id}>
+                          <td>{row.name}</td>
+                          <td>{formatMoney(row.totalInflow)}</td>
+                          <td>{formatMoney(row.totalOutflow)}</td>
+                          <td className={row.net >= 0 ? 'pos' : 'neg'}>{formatMoney(row.net)}</td>
+                          <td>{formatMoney(row.balance)}</td>
+                          <td>
+                            <button className="btn btn-ghost" type="button" onClick={() => changeCompany(row.id)}>
+                              Detay
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
         </>
       )}
-    </>
+    </div>
   );
 }
 
-function Kpi({ label, value, accent }: { label: string; value: string; accent: string }) {
+function KpiCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone: 'in' | 'out' | 'net' | 'bal';
+}) {
   return (
-    <div className="card kpi" style={{ ['--accent' as string]: accent }}>
-      <div className="label">{label}</div>
-      <div className="value">{value}</div>
+    <article className={`dash-kpi tone-${tone}`}>
+      <div className="dash-kpi-label">{label}</div>
+      <div className="dash-kpi-value">{value}</div>
+      <div className="dash-kpi-hint">{hint}</div>
+    </article>
+  );
+}
+
+function MoneyTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="dash-tooltip">
+      <div className="dash-tooltip-label">{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="dash-tooltip-row">
+          <span style={{ color: p.color || p.fill }}>{p.name}</span>
+          <strong>{formatMoney(Number(p.value) || 0)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const selectStyle: CSSProperties = {
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '0.45rem 0.7rem',
+  background: '#fff',
+};
+
+function DownSelect({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className={`down-select ${open ? 'open' : ''}`} ref={rootRef}>
+      <button
+        type="button"
+        className="down-select-trigger"
+        style={selectStyle}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>{selected?.label ?? '—'}</span>
+        <span className="down-select-caret" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul className="down-select-menu" role="listbox" aria-label={ariaLabel}>
+          {options.map((o) => (
+            <li key={o.value}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={o.value === value}
+                className={`down-select-option ${o.value === value ? 'active' : ''}`}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -1,10 +1,10 @@
-import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api, type AuthUser, type Company } from './api';
 import CompaniesPage from './pages/CompaniesPage';
 import DashboardPage from './pages/DashboardPage';
 import ImportPage from './pages/ImportPage';
-import ProfilePage from './pages/ProfilePage';
+import LogsPage from './pages/LogsPage';
 import LoginPage from './pages/LoginPage';
 
 export default function App() {
@@ -80,9 +80,6 @@ export default function App() {
     );
   }
 
-  const parent = companies.find((c) => c.role === 'parent');
-  const subsidiaries = companies.filter((c) => c.role === 'subsidiary');
-
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -96,22 +93,7 @@ export default function App() {
           </NavLink>
           <NavLink to="/companies">Şirketler</NavLink>
           <NavLink to="/import">Excel Yükle</NavLink>
-          <NavLink to="/profile">Şirket Profili</NavLink>
-          {parent && (
-            <button className="linkish" type="button" onClick={() => navigate(`/?company=${parent.id}`)}>
-              Konsolide Görünüm
-            </button>
-          )}
-          {subsidiaries.map((s) => (
-            <button
-              key={s.id}
-              className="linkish"
-              type="button"
-              onClick={() => navigate(`/?company=${s.id}`)}
-            >
-              {s.name}
-            </button>
-          ))}
+          <NavLink to="/logs">İşlem Logları</NavLink>
         </nav>
         <div className="sidebar-foot">
           <div className="sidebar-user">
@@ -143,7 +125,8 @@ export default function App() {
             element={<CompaniesPage companies={companies} onChange={refresh} />}
           />
           <Route path="/import" element={<ImportPage companies={companies} onImported={refresh} />} />
-          <Route path="/profile" element={<ProfilePage companies={companies} />} />
+          <Route path="/logs" element={<LogsPage />} />
+          <Route path="/profile" element={<Navigate to="/companies" replace />} />
         </Routes>
       </main>
     </div>

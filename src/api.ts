@@ -99,9 +99,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
-  importExcel: async (id: string, file: File) => {
+  importExcel: async (id: string, file: File, period: { year: number; month: number }) => {
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('year', String(period.year));
+    fd.append('month', String(period.month));
     return request<{
       importId: string;
       status: string;
@@ -115,11 +117,67 @@ export const api = {
         lastBalance: number;
       };
       year: number;
+      month: number;
       lineCount: number;
       weekCount: number;
+      dashboardPath: string;
     }>(`/api/companies/${id}/import`, { method: 'POST', body: fd });
   },
-  dashboard: (id: string) => request<any>(`/api/companies/${id}/dashboard`),
+  listPeriods: (id: string) =>
+    request<{
+      periods: { year: number; month: number; filename?: string; created_at?: string }[];
+      latest: { year: number; month: number } | null;
+    }>(`/api/companies/${id}/periods`),
+  listImports: (id: string) =>
+    request<
+      {
+        id: string;
+        filename: string;
+        status: string;
+        message: string | null;
+        year: number | null;
+        month: number | null;
+        created_at: string;
+      }[]
+    >(`/api/companies/${id}/imports`),
+  listAllImports: (opts?: { companyId?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (opts?.companyId) q.set('companyId', opts.companyId);
+    if (opts?.status) q.set('status', opts.status);
+    const qs = q.toString();
+    return request<{
+      total: number;
+      items: ImportJob[];
+    }>(`/api/imports${qs ? `?${qs}` : ''}`);
+  },
+  downloadImportFile: async (id: string, filename: string) => {
+    const res = await fetch(`/api/imports/${id}/file`, {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || 'Dosya indirilemedi');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  dashboard: (
+    id: string,
+    opts?: { year?: number; month?: number | 'all' },
+  ) => {
+    const q = new URLSearchParams();
+    if (opts?.year) q.set('year', String(opts.year));
+    if (opts?.month === 'all' || opts?.month == null) q.set('month', 'all');
+    else q.set('month', String(opts.month));
+    const qs = q.toString();
+    return request<any>(`/api/companies/${id}/dashboard${qs ? `?${qs}` : ''}`);
+  },
   seedDemo: () =>
     request<any>('/api/demo/seed', {
       method: 'POST',
@@ -155,7 +213,68 @@ export const api = {
   downloadPresentation: async (id: string, filename: string) => {
     return api.downloadExport(id, 'pptx', { month: 'all' }, filename);
   },
+  listLogs: (opts?: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    username?: string;
+    q?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (opts?.limit) q.set('limit', String(opts.limit));
+    if (opts?.offset) q.set('offset', String(opts.offset));
+    if (opts?.category) q.set('category', opts.category);
+    if (opts?.username) q.set('username', opts.username);
+    if (opts?.q) q.set('q', opts.q);
+    const qs = q.toString();
+    return request<{
+      total: number;
+      limit: number;
+      offset: number;
+      items: ActivityLog[];
+      stats: {
+        total: number;
+        byCategory: { category: string; c: number }[];
+        lastAt: string | null;
+      };
+    }>(`/api/logs${qs ? `?${qs}` : ''}`);
+  },
+  clearLogs: () =>
+    request<{ ok: boolean }>('/api/logs', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }),
 };
+
+export interface ActivityLog {
+  id: string;
+  userId: string | null;
+  username: string | null;
+  action: string;
+  category: string;
+  detail: string | null;
+  method: string | null;
+  path: string | null;
+  statusCode: number | null;
+  ip: string | null;
+  level: string;
+  createdAt: string;
+  meta: Record<string, unknown> | null;
+}
+
+export interface ImportJob {
+  id: string;
+  companyId: string;
+  companyName: string | null;
+  filename: string;
+  status: string;
+  message: string | null;
+  year: number | null;
+  month: number | null;
+  createdAt: string;
+  hasFile: boolean;
+}
 
 export function formatMoney(n: number): string {
   return new Intl.NumberFormat('tr-TR', {

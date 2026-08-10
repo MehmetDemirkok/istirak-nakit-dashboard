@@ -104,7 +104,11 @@ export async function seedThreeDemoCompanies() {
 
     const dest = path.join(UPLOADS_DIR, `demo-${Date.now()}-${demo.factor}.xlsx`);
     fs.copyFileSync(sample, dest);
-    const result = await importExcelFile(sub.id, dest, 'ornek-nakit-akis.xlsx');
+    // Demo: 2025 tüm ayları yükle (ay ay takip için her ay ayrı satır)
+    const result = await importExcelFile(sub.id, dest, 'ornek-nakit-akis.xlsx', {
+      year: 2025,
+      month: null,
+    });
     if (result.status === 'ok') scaleCompanyData(sub.id, demo.factor);
 
     created.push({

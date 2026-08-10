@@ -61,7 +61,10 @@ authRoutes.post('/login', (req, res) => {
 });
 
 authRoutes.post('/logout', (req, res) => {
-  destroySession(readToken(req));
+  const token = readToken(req);
+  const user = getUserBySession(token);
+  if (user) req.user = user;
+  destroySession(token);
   res.clearCookie(COOKIE, { path: '/' });
   res.json({ ok: true });
 });

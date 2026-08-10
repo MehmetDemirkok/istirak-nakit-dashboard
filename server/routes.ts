@@ -1,23 +1,26 @@
 import { Router } from 'express';
 import multer from 'multer';
+import fs from 'node:fs';
+import path from 'node:path';
 import { v4 as uuid } from 'uuid';
 import { db, UPLOADS_DIR, type Company, type CompanyProfile } from './db.js';
-import { importExcelFile } from './importService.js';
+import { getLatestPeriod, importExcelFile, listCompanyPeriods } from './importService.js';
 import {
   companyHasData,
-  getCategoryTotals,
   getCompanyYear,
-  getConsolidatedDashboard,
-  getKpis,
-  getMonthlySeries,
-  getWeeklyBalanceSeries,
 } from './analytics.js';
 import { buildPresentation } from './pptxExport.js';
 import { buildPdfReport } from './pdfExport.js';
 import { buildExcelReport } from './excelExport.js';
-import { parsePeriodQuery, periodLabel } from './periodReport.js';
+import {
+  getConsolidatedPeriodDashboard,
+  getPeriodReport,
+  parsePeriodQuery,
+  periodLabel,
+} from './periodReport.js';
 import { requireAuth } from './authRoutes.js';
 import { seedThreeDemoCompanies } from './demoSeed.js';
+import { activityStats, clearActivities, listActivities } from './activityLog.js';
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -164,7 +167,27 @@ api.post('/companies/:id/import', upload.single('file'), async (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'Dosya gerekli' });
 
-    const result = await importExcelFile(company.id, req.file.path, req.file.originalname);
+    const year = Number(req.body?.year);
+    const monthRaw = req.body?.month;
+    const month =
+      monthRaw === '' || monthRaw == null || monthRaw === 'all'
+        ? null
+        : Number(monthRaw);
+
+    if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({ error: 'Geçerli bir yıl seçin (örn. 2026)' });
+    }
+    if (month != null && (!Number.isFinite(month) || month < 0 || month > 11)) {
+      return res.status(400).json({ error: 'Geçerli bir ay seçin (0–11)' });
+    }
+    if (month == null) {
+      return res.status(400).json({ error: 'Hangi ayın verisini yüklediğinizi seçin' });
+    }
+
+    const result = await importExcelFile(company.id, req.file.path, req.file.originalname, {
+      year,
+      month,
+    });
     res.json({
       importId: result.importId,
       status: result.status,
@@ -172,9 +195,11 @@ api.post('/companies/:id/import', upload.single('file'), async (req, res) => {
       warnings: result.parsed.warnings,
       errors: result.parsed.errors,
       summary: result.parsed.summary,
-      year: result.parsed.year,
+      year: result.year,
+      month: result.month,
       lineCount: result.parsed.lines.length,
       weekCount: result.parsed.weeks.length,
+      dashboardPath: `/?company=${company.id}&year=${result.year}&month=${result.month}`,
     });
   } catch (err) {
     console.error(err);
@@ -185,32 +210,133 @@ api.post('/companies/:id/import', upload.single('file'), async (req, res) => {
 api.get('/companies/:id/imports', (req, res) => {
   const rows = db
     .prepare(
-      `SELECT id, filename, status, message, year, created_at FROM import_jobs
-       WHERE company_id = ? ORDER BY created_at DESC LIMIT 20`,
+      `SELECT id, filename, status, message, year, month, created_at FROM import_jobs
+       WHERE company_id = ? ORDER BY created_at DESC LIMIT 50`,
     )
     .all(req.params.id);
   res.json(rows);
 });
 
-// Dashboard
+/** Sistemdeki tüm Excel yüklemeleri */
+api.get('/imports', (req, res) => {
+  const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : null;
+  const status = typeof req.query.status === 'string' ? req.query.status : null;
+  const where: string[] = [];
+  const params: string[] = [];
+  if (companyId) {
+    where.push(`j.company_id = ?`);
+    params.push(companyId);
+  }
+  if (status && status !== 'all') {
+    where.push(`j.status = ?`);
+    params.push(status);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows = db
+    .prepare(
+      `SELECT j.id, j.company_id, c.name as company_name, j.filename, j.stored_path, j.status,
+              j.message, j.year, j.month, j.created_at
+       FROM import_jobs j
+       LEFT JOIN companies c ON c.id = j.company_id
+       ${whereSql}
+       ORDER BY j.created_at DESC
+       LIMIT 300`,
+    )
+    .all(...params) as {
+    id: string;
+    company_id: string;
+    company_name: string | null;
+    filename: string;
+    stored_path: string;
+    status: string;
+    message: string | null;
+    year: number | null;
+    month: number | null;
+    created_at: string;
+  }[];
+
+  res.json({
+    total: rows.length,
+    items: rows.map((r) => ({
+      id: r.id,
+      companyId: r.company_id,
+      companyName: r.company_name,
+      filename: r.filename,
+      status: r.status,
+      message: r.message,
+      year: r.year,
+      month: r.month,
+      createdAt: r.created_at,
+      hasFile: !!(r.stored_path && fs.existsSync(r.stored_path)),
+    })),
+  });
+});
+
+api.get('/imports/:id/file', (req, res) => {
+  const row = db
+    .prepare(`SELECT id, filename, stored_path FROM import_jobs WHERE id = ?`)
+    .get(req.params.id) as { id: string; filename: string; stored_path: string } | undefined;
+  if (!row) return res.status(404).json({ error: 'Yükleme bulunamadı' });
+  if (!row.stored_path || !fs.existsSync(row.stored_path)) {
+    return res.status(404).json({ error: 'Dosya diskte bulunamadı' });
+  }
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  );
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${encodeURIComponent(row.filename)}"`,
+  );
+  res.sendFile(path.resolve(row.stored_path));
+});
+
+api.get('/companies/:id/periods', (req, res) => {
+  const company = db.prepare(`SELECT id FROM companies WHERE id = ?`).get(req.params.id);
+  if (!company) return res.status(404).json({ error: 'Bulunamadı' });
+  const periods = listCompanyPeriods(req.params.id);
+  const latest = getLatestPeriod(req.params.id);
+  res.json({ periods, latest });
+});
+
+// Dashboard (year + month filter updates KPIs/charts)
 api.get('/companies/:id/dashboard', (req, res) => {
   const company = db.prepare(`SELECT * FROM companies WHERE id = ?`).get(req.params.id) as
     | Company
     | undefined;
   if (!company) return res.status(404).json({ error: 'Bulunamadı' });
 
+  const filter = parsePeriodQuery(
+    { year: req.query.year as string | undefined, month: req.query.month as string | undefined },
+    company.id,
+  );
+
   if (company.role === 'parent') {
-    return res.json({ type: 'consolidated', company, ...getConsolidatedDashboard(company.id) });
+    return res.json({
+      type: 'consolidated',
+      company,
+      ...getConsolidatedPeriodDashboard(company.id, filter),
+      hasData: true,
+    });
   }
 
+  const report = getPeriodReport(company.id, filter);
+  const periods = listCompanyPeriods(company.id);
+  const latest = getLatestPeriod(company.id);
   res.json({
     type: 'subsidiary',
     company,
-    kpis: getKpis(company.id),
-    categories: getCategoryTotals(company.id),
-    monthly: getMonthlySeries(company.id),
-    weekly: getWeeklyBalanceSeries(company.id),
+    periodLabel: report.label,
+    filter: report.filter,
+    kpis: report.kpis,
+    categories: report.categories,
+    monthly: report.monthly,
+    weekly: report.weekly,
+    dataYear: getCompanyYear(company.id),
+    periods,
+    latest,
     hasData: companyHasData(company.id),
+    hasPeriodData: companyHasData(company.id, filter.year),
   });
 });
 
@@ -323,3 +449,21 @@ api.post('/demo/seed', async (_req, res) => {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Seed hatası' });
   }
 });
+
+// Activity logs
+api.get('/logs', (req, res) => {
+  const result = listActivities({
+    limit: Number(req.query.limit) || 100,
+    offset: Number(req.query.offset) || 0,
+    category: typeof req.query.category === 'string' ? req.query.category : undefined,
+    username: typeof req.query.username === 'string' ? req.query.username : undefined,
+    q: typeof req.query.q === 'string' ? req.query.q : undefined,
+  });
+  res.json({ ...result, stats: activityStats() });
+});
+
+api.delete('/logs', (_req, res) => {
+  clearActivities();
+  res.json({ ok: true });
+});
+

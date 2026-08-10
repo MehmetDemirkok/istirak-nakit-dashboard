@@ -8,6 +8,7 @@ import { api } from './routes.js';
 import { DATA_DIR } from './db.js';
 import { cleanupExpiredSessions, ensureAdminUser } from './auth.js';
 import { authRoutes } from './authRoutes.js';
+import { activityMiddleware } from './activityLog.js';
 
 ensureAdminUser();
 cleanupExpiredSessions();
@@ -23,6 +24,7 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
 app.use(express.json({ limit: '2mb' }));
 
+app.use('/api', activityMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api', api);
 
