@@ -7,10 +7,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
 export const DATA_DIR = path.join(ROOT_DIR, 'data');
 export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+export const AVATARS_DIR = path.join(DATA_DIR, 'avatars');
 export const SAMPLES_DIR = path.join(DATA_DIR, 'samples');
 export const TEMPLATES_DIR = path.join(ROOT_DIR, 'templates');
 
-for (const dir of [DATA_DIR, UPLOADS_DIR, SAMPLES_DIR, TEMPLATES_DIR]) {
+for (const dir of [DATA_DIR, UPLOADS_DIR, AVATARS_DIR, SAMPLES_DIR, TEMPLATES_DIR]) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -97,6 +98,19 @@ db.exec(`
 `);
 
 migrateCashFlowSchema();
+migrateUserProfileSchema();
+
+function migrateUserProfileSchema() {
+  const cols = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
+  const names = new Set(cols.map((c) => c.name));
+  const add = (col: string, defSql: string) => {
+    if (!names.has(col)) db.exec(`ALTER TABLE users ADD COLUMN ${col} ${defSql}`);
+  };
+  add('first_name', 'TEXT');
+  add('last_name', 'TEXT');
+  add('email', 'TEXT');
+  add('avatar_path', 'TEXT');
+}
 
 function migrateCashFlowSchema() {
   const importCols = db.prepare(`PRAGMA table_info(import_jobs)`).all() as { name: string }[];

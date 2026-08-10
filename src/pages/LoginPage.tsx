@@ -1,9 +1,10 @@
 import { FormEvent, useState } from 'react';
+import type { AuthUser } from '../api';
 
 export default function LoginPage({
   onLogin,
 }: {
-  onLogin: (payload: { token: string; user: { username: string; role: string } }) => void;
+  onLogin: (payload: { token: string; user: AuthUser }) => void;
 }) {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');

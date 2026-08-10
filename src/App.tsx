@@ -1,11 +1,28 @@
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api, type AuthUser, type Company } from './api';
+import AccountPage from './pages/AccountPage';
 import CompaniesPage from './pages/CompaniesPage';
 import DashboardPage from './pages/DashboardPage';
 import ImportPage from './pages/ImportPage';
 import LogsPage from './pages/LogsPage';
 import LoginPage from './pages/LoginPage';
+
+function UserAvatar({ user }: { user: AuthUser }) {
+  const [broken, setBroken] = useState(false);
+  const showImg = !!user.avatarUrl && !broken;
+  if (showImg) {
+    return (
+      <img
+        className="sidebar-avatar-img"
+        src={`${user.avatarUrl}?v=${user.id}`}
+        alt={user.displayName || user.username}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return <div className="sidebar-avatar">{user.initials || user.username.slice(0, 1).toUpperCase()}</div>;
+}
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -45,7 +62,7 @@ export default function App() {
 
   useEffect(() => {
     if (user) refresh();
-  }, [user]);
+  }, [user?.id]);
 
   const logout = async () => {
     try {
@@ -80,6 +97,8 @@ export default function App() {
     );
   }
 
+  const displayName = user.displayName || user.username;
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -94,15 +113,21 @@ export default function App() {
           <NavLink to="/companies">Şirketler</NavLink>
           <NavLink to="/import">Excel Yükle</NavLink>
           <NavLink to="/logs">İşlem Logları</NavLink>
+          <NavLink to="/account">Hesabım</NavLink>
         </nav>
         <div className="sidebar-foot">
-          <div className="sidebar-user">
-            <div className="sidebar-avatar">{user.username.slice(0, 1).toUpperCase()}</div>
+          <button className="sidebar-user sidebar-user-btn" type="button" onClick={() => navigate('/account')}>
+            <UserAvatar user={user} />
             <div className="sidebar-user-meta">
-              <div className="name">{user.username}</div>
-              <div className="role">{user.role === 'admin' ? 'Yönetici' : user.role}</div>
+              <div className="name" title={displayName}>
+                {displayName}
+              </div>
+              <div className="role">
+                {user.role === 'admin' ? 'Yönetici' : user.role}
+                {user.email ? ` · ${user.email}` : ''}
+              </div>
             </div>
-          </div>
+          </button>
           <button className="sidebar-logout" type="button" onClick={logout}>
             Çıkış Yap
           </button>
@@ -126,6 +151,10 @@ export default function App() {
           />
           <Route path="/import" element={<ImportPage companies={companies} onImported={refresh} />} />
           <Route path="/logs" element={<LogsPage />} />
+          <Route
+            path="/account"
+            element={<AccountPage user={user} onUserChange={setUser} />}
+          />
           <Route path="/profile" element={<Navigate to="/companies" replace />} />
         </Routes>
       </main>

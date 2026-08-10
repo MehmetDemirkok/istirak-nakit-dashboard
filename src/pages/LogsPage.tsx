@@ -9,7 +9,6 @@ const CATEGORIES: { value: string; label: string }[] = [
   { value: 'import', label: 'Excel' },
   { value: 'dashboard', label: 'Dashboard' },
   { value: 'export', label: 'Rapor' },
-  { value: 'demo', label: 'Demo' },
   { value: 'logs', label: 'Log' },
   { value: 'api', label: 'Diğer' },
 ];

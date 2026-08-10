@@ -32,6 +32,12 @@ export interface AuthUser {
   id: string;
   username: string;
   role: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+  displayName?: string;
+  initials?: string;
 }
 
 function authHeaders(extra?: HeadersInit): HeadersInit {
@@ -71,6 +77,23 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ ok: boolean }>('/api/health'),
   me: () => request<{ user: AuthUser }>('/api/auth/me'),
+  updateProfile: (body: { firstName: string; lastName: string; email: string }) =>
+    request<{ user: AuthUser }>('/api/auth/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  uploadAvatar: async (file: File) => {
+    const fd = new FormData();
+    fd.append('avatar', file);
+    return request<{ user: AuthUser }>('/api/auth/avatar', { method: 'POST', body: fd });
+  },
+  deleteAvatar: () =>
+    request<{ user: AuthUser }>('/api/auth/avatar', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }),
   logout: () =>
     request<{ ok: boolean }>('/api/auth/logout', {
       method: 'POST',
@@ -178,12 +201,6 @@ export const api = {
     const qs = q.toString();
     return request<any>(`/api/companies/${id}/dashboard${qs ? `?${qs}` : ''}`);
   },
-  seedDemo: () =>
-    request<any>('/api/demo/seed', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    }),
   downloadExport: async (
     id: string,
     format: 'pptx' | 'pdf' | 'xlsx',

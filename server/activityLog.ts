@@ -123,8 +123,32 @@ export function describeApiCall(req: Request, status: number): {
     return {
       action: 'Oturum kontrolü',
       category: 'auth',
-      detail: ok ? `${req.user?.username || 'kullanıcı'} oturumu doğrulandı` : 'Oturum yok',
+      detail: ok ? `${req.user?.displayName || req.user?.username || 'kullanıcı'} oturumu doğrulandı` : 'Oturum yok',
       level: 'info',
+    };
+  }
+  if (path === '/api/auth/profile' && method === 'PUT') {
+    return {
+      action: ok ? 'Kullanıcı profili güncellendi' : 'Profil güncellenemedi',
+      category: 'auth',
+      detail: req.user?.displayName || req.user?.username || '—',
+      level,
+    };
+  }
+  if (path === '/api/auth/avatar' && method === 'POST') {
+    return {
+      action: ok ? 'Profil fotoğrafı yüklendi' : 'Fotoğraf yüklenemedi',
+      category: 'auth',
+      detail: req.user?.displayName || req.user?.username || '—',
+      level,
+    };
+  }
+  if (path === '/api/auth/avatar' && method === 'DELETE') {
+    return {
+      action: ok ? 'Profil fotoğrafı silindi' : 'Fotoğraf silinemedi',
+      category: 'auth',
+      detail: req.user?.displayName || req.user?.username || '—',
+      level,
     };
   }
 
@@ -250,15 +274,6 @@ export function describeApiCall(req: Request, status: number): {
     };
   }
 
-  // Demo / logs
-  if (path === '/api/demo/seed' && method === 'POST') {
-    return {
-      action: ok ? 'Demo veriler yüklendi' : 'Demo yükleme hatası',
-      category: 'demo',
-      detail: '3 demo şirket seed',
-      level,
-    };
-  }
   if (path.startsWith('/api/logs') && method === 'GET') {
     return {
       action: 'İşlem logları görüntülendi',
@@ -297,12 +312,14 @@ export function activityMiddleware(req: Request, res: Response, next: NextFuncti
       if (path === '/api/health') return;
       if (path === '/api/auth/me' && req.method === 'GET') return;
       if (path === '/api/logs' && req.method === 'GET') return;
+      if (path.startsWith('/api/auth/avatar/') && req.method === 'GET') return;
 
       // Log listesini her poll'da şişirmemek için: sadece ilk sayfa / filtre değişimi değil her GET log'u
       // kullanıcı "her şeyi" istedi — yine de /api/logs GET'i loglanır ama meta ile ayırt edilir
 
       const desc = describeApiCall(req, res.statusCode);
       const username =
+        req.user?.displayName ||
         req.user?.username ||
         (typeof req.body?.username === 'string' ? req.body.username : null);
 

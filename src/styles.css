@@ -143,9 +143,83 @@ a {
   margin-bottom: 0.65rem;
 }
 
+.sidebar-user-btn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0.35rem 0.25rem;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.sidebar-user-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .sidebar-avatar {
   width: 36px;
   height: 36px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sidebar-avatar-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.account-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.account-photo-card {
+  text-align: center;
+}
+
+.account-photo-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.account-photo {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #d8dee8;
+}
+
+.account-photo.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #0b4da8, #083a7a);
+  color: #fff;
+  font-size: 2.4rem;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .account-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
   border-radius: 50%;
   background: linear-gradient(135deg, var(--navy), #1d6fd8);
   color: #fff;
@@ -172,6 +246,9 @@ a {
 .sidebar-user-meta .role {
   color: #8fa3b8;
   font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-logout {

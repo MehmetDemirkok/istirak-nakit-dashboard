@@ -3,6 +3,8 @@ dist
 dist-server
 data/uploads
 data/uploads/**
+data/avatars
+data/avatars/**
 data/app.db
 data/app.db-*
 .DS_Store

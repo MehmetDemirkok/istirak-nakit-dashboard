@@ -19,7 +19,6 @@ import {
   periodLabel,
 } from './periodReport.js';
 import { requireAuth } from './authRoutes.js';
-import { seedThreeDemoCompanies } from './demoSeed.js';
 import { activityStats, clearActivities, listActivities } from './activityLog.js';
 
 const upload = multer({
@@ -431,22 +430,6 @@ api.get('/companies/:id/presentation', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Sunum hatası' });
-  }
-});
-
-// Seed helper for 3 demo companies
-api.post('/demo/seed', async (_req, res) => {
-  try {
-    const result = await seedThreeDemoCompanies();
-    res.json({
-      parent: result.parent,
-      subsidiaries: result.subsidiaries,
-      message: `${result.subsidiaries.length} demo iştirak yüklendi`,
-      status: 'ok',
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Seed hatası' });
   }
 });
 

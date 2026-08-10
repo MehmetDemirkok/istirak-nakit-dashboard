@@ -8,7 +8,7 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
     "build": "tsc -p tsconfig.server.json && vite build",
-    "start": "NODE_ENV=production node dist-server/index.js",
+    "start": "node scripts/start-prod.mjs",
     "parse:test": "tsx scripts/test-parser.ts"
   },
   "dependencies": {

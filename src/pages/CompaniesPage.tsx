@@ -150,20 +150,6 @@ export default function CompaniesPage({
     }
   };
 
-  const seed = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await api.seedDemo();
-      setMsg(r.message || '3 demo şirket yüklendi');
-      await onChange();
-    } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : 'Demo yüklenemedi');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const setField = (key: keyof CompanyProfile, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
   };
@@ -174,11 +160,6 @@ export default function CompaniesPage({
         <div>
           <h2>Şirketler</h2>
           <p>Tüm şirketleri, profilleri ve detayları buradan yönetin.</p>
-        </div>
-        <div className="toolbar">
-          <button className="btn btn-ghost" type="button" onClick={seed} disabled={busy}>
-            3 Demo Şirket Yükle
-          </button>
         </div>
       </div>
 

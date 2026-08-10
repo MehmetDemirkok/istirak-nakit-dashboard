@@ -1,54 +1,39 @@
 # İştirak Nakit Akış Dashboard
 
-Lokal web uygulaması: iştirak Excel’lerini dashboard’a çevirir ve sunum (PPTX) üretir.  
+Lokal web uygulaması: iştirak Excel’lerini dashboard’a çevirir; PPTX / PDF / Excel üretir.  
 **Tüm veri yalnızca bu bilgisayarda kalır** — dış API, telemetri veya bulut yok.
 
-## Gereksinimler
+## Son kullanıcı (yazılımcı değil)
 
-- Node.js 20+ (Windows veya macOS)
-- Örnek Excel şablonuyla aynı yapı (`NAKİT AKIŞ-Haftalık` sayfası)
+1. [Node.js LTS](https://nodejs.org) kurun.  
+2. Bu klasörü bilgisayara kopyalayın.  
+3. **Windows:** `Masaustu-Kisayol-Olustur.bat` → çift tık.  
+   **macOS:** `Masaustu-Kisayol-Olustur.command` → çift tık.  
+4. Masaüstündeki **Istirak Nakit Dashboard** kısayoluna çift tıklayın.  
+5. Tarayıcı: [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
-## Hızlı başlangıç
+Detaylı adımlar: **`KURULUM.txt`**
 
-### Windows
-`baslat.bat` dosyasına çift tıklayın.
+İlk giriş: `admin` / `Admin123!`
 
-### macOS
-```bash
-chmod +x baslat.sh
-./baslat.sh
-```
+## Geliştirici
 
-### Manuel
 ```bash
 npm install
-npm run dev
+npm run dev          # http://127.0.0.1:5173
+npm run build && npm start   # üretim: http://127.0.0.1:8787
 ```
-
-Tarayıcı: [http://127.0.0.1:5173](http://127.0.0.1:5173)  
-API: [http://127.0.0.1:8787](http://127.0.0.1:8787)
-
-## Giriş (admin)
-
-İlk çalıştırmada otomatik admin oluşturulur:
-
-| Alan | Değer |
-|------|--------|
-| Kullanıcı | `admin` |
-| Şifre | `Admin123!` |
-
-Oturum bu bilgisayarda saklanır (SQLite + çerez/token).
 
 ## Kullanım akışı
 
-1. **Şirketler** — Ana şirket + iştirakleri, profil ve detayları tek sayfada yönetin (veya “3 Demo Şirket Yükle”).
-2. **Excel Yükle** — İştirak + **yıl/ay** seçip `.xlsx` yükleyin; veri dashboardda o dönemden izlenir.
-3. **Dashboard** — Şirket ve dönem (yıl/ay) seçerek KPI ve grafikleri görüntüleyin.
-4. **Rapor çıktısı** — Aynı dönem için **PPTX / PDF / Excel** indirin.
-5. **İşlem Logları** — Kim, ne zaman, hangi işlemi yaptı (giriş, şirket, Excel, dashboard, export…).
+1. **Şirketler** — Ana holding + iştirakleri ve profilleri yönetin.  
+2. **Excel Yükle** — İştirak + yıl/ay seçip `.xlsx` yükleyin.  
+3. **Dashboard** — Dönem bazlı KPI ve grafikler.  
+4. **Rapor** — PPTX / PDF / Excel indirin.  
+5. **İşlem Logları** — Kim, ne zaman, ne yaptı.  
+6. **Hesabım** — Ad, soyad, e-posta ve profil fotoğrafı.
 
-
-## Veri konumu (gizlilik)
+## Veri konumu
 
 | Yol | İçerik |
 |-----|--------|
@@ -58,27 +43,11 @@ Oturum bu bilgisayarda saklanır (SQLite + çerez/token).
 
 Sunucu yalnızca `127.0.0.1` adresine bağlanır.
 
-## Üretim modu
-
-```bash
-npm run build
-NODE_ENV=production npm start
-```
-
-Windows PowerShell:
-```powershell
-npm run build
-$env:NODE_ENV="production"; npm start
-```
-
-Tek süreç: API + statik arayüz `http://127.0.0.1:8787`
-
 ## Excel kuralları
 
 - Asıl kaynak: **NAKİT AKIŞ-Haftalık**
 - Satır kodları: `F-A.01`, `F-B.01`, … (kategoriler A–J)
-- Aylık görünüm haftalardan ve/veya `GRAFİK` sayfasından üretilir
 
 ## Teknoloji
 
-React + Vite · Express · SQLite · ExcelJS · Recharts · PptxGenJS
+React + Vite · Express · SQLite · ExcelJS · Recharts · PptxGenJS · PDFKit
