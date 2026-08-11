@@ -9,7 +9,9 @@
     "dev:client": "vite",
     "build": "tsc -p tsconfig.server.json && vite build",
     "start": "node scripts/start-prod.mjs",
-    "parse:test": "tsx scripts/test-parser.ts"
+    "parse:test": "tsx scripts/test-parser.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "seed:clear": "tsx scripts/clear-demo.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

@@ -20,6 +20,20 @@ npm run dev          # http://127.0.0.1:5173
 npm run build && npm start   # üretim: http://127.0.0.1:8787
 ```
 
+## Demo veri (müşteri sunumu)
+
+Yüksek tutarlı örnek holding + 4 iştirak ve 2026 nakit akışını yükler / siler:
+
+```bash
+npm run seed:demo    # Nova Teknoloji Holding + iştirakler (yüksek tutarlar)
+npm run seed:clear   # Tüm demo şirketleri ve bağlı verileri siler
+```
+
+- `seed:demo` önce varsa eski demoyu temizler, sonra yeniden ekler.
+- `seed:clear` yalnızca siler; gerçek (demo olmayan) şirketlere dokunmaz.
+- Demo iştirak adları `[DEMO]` ile başlar; ana şirket: **Nova Teknoloji Holding A.Ş.**
+- Giriş değişmez: `admin` / `Admin123!`
+
 ## Kullanım akışı
 
 1. **Şirketler** — Ana holding + iştirakleri ve profilleri yönetin.  
