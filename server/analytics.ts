@@ -164,6 +164,39 @@ export function getCategoryTotals(companyId: string, year = getCompanyYear(compa
   return result;
 }
 
+/** Largest detail line for a category set in the given period. */
+export function getTopDetailLine(
+  companyId: string,
+  year: number,
+  opts: {
+    categories?: string[];
+    excludeCategories?: string[];
+    periodType: string;
+    periodIndex?: number;
+  },
+): { label: string; amount: number } | null {
+  let sql = `SELECT label, COALESCE(SUM(amount), 0) as amount
+    FROM cash_flow_lines
+    WHERE company_id = ? AND year = ? AND period_type = ? AND line_kind = 'detail'`;
+  const params: (string | number)[] = [companyId, year, opts.periodType];
+  if (opts.periodIndex != null) {
+    sql += ` AND period_index = ?`;
+    params.push(opts.periodIndex);
+  }
+  if (opts.categories?.length) {
+    sql += ` AND category IN (${opts.categories.map(() => '?').join(',')})`;
+    params.push(...opts.categories);
+  }
+  if (opts.excludeCategories?.length) {
+    sql += ` AND category NOT IN (${opts.excludeCategories.map(() => '?').join(',')})`;
+    params.push(...opts.excludeCategories);
+  }
+  sql += ` GROUP BY label HAVING ABS(amount) > 0 ORDER BY ABS(amount) DESC LIMIT 1`;
+  const row = db.prepare(sql).get(...params) as { label: string; amount: number } | undefined;
+  if (!row || !row.label) return null;
+  return { label: row.label, amount: row.amount };
+}
+
 export function getMonthlySeries(companyId: string, year = getCompanyYear(companyId)) {
   return MONTH_LABELS.map((label, idx) => {
     const inflow = sumDetails(companyId, year, 'A', 'month', idx);

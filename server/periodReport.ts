@@ -3,6 +3,7 @@ import { CATEGORY_META, MONTH_LABELS, OUTFLOW_ORDER } from './categories.js';
 import {
   getCompanyYear,
   getMonthlySeries,
+  getTopDetailLine,
   getWeeklyBalanceSeries,
   sumDetails,
 } from './analytics.js';
@@ -79,6 +80,10 @@ export interface PeriodReport {
     outflow: number;
     net: number;
   }[];
+  highlights: {
+    topInflow: { label: string; amount: number } | null;
+    topOutflow: { label: string; amount: number; key?: string; pct?: number } | null;
+  };
 }
 
 export function getPeriodReport(companyId: string, filter: PeriodFilter): PeriodReport {
@@ -144,6 +149,52 @@ export function getPeriodReport(companyId: string, filter: PeriodFilter): Period
     };
   });
 
+  const detailPeriod =
+    monthIdx == null
+      ? { periodType: 'year', periodIndex: 0 }
+      : { periodType: 'month', periodIndex: monthIdx };
+
+  let topInflow = getTopDetailLine(companyId, year, {
+    categories: ['A'],
+    ...detailPeriod,
+  });
+
+  // Weekly-only sheets: fall back to largest A detail across weeks in scope
+  if (!topInflow && monthIdx != null) {
+    const weekIndexes = weeksInScope.map((w) => w.index);
+    if (weekIndexes.length) {
+      const placeholders = weekIndexes.map(() => '?').join(',');
+      const row = db
+        .prepare(
+          `SELECT label, COALESCE(SUM(amount), 0) as amount
+           FROM cash_flow_lines
+           WHERE company_id = ? AND year = ? AND period_type = 'week'
+             AND line_kind = 'detail' AND category = 'A'
+             AND period_index IN (${placeholders})
+           GROUP BY label HAVING ABS(amount) > 0
+           ORDER BY ABS(amount) DESC LIMIT 1`,
+        )
+        .get(companyId, year, ...weekIndexes) as { label: string; amount: number } | undefined;
+      if (row?.label) topInflow = { label: row.label, amount: row.amount };
+    }
+  }
+  if (!topInflow && monthIdx == null) {
+    topInflow = getTopDetailLine(companyId, year, {
+      categories: ['A'],
+      periodType: 'week',
+    });
+  }
+  const topOutflowCat = [...categories].sort((a, b) => b.period - a.period)[0];
+  const topOutflow =
+    topOutflowCat && topOutflowCat.period > 0
+      ? {
+          label: topOutflowCat.shortLabel,
+          amount: topOutflowCat.period,
+          key: topOutflowCat.key,
+          pct: monthOutflow > 0 ? (topOutflowCat.period / monthOutflow) * 100 : 0,
+        }
+      : null;
+
   return {
     companyId,
     filter,
@@ -158,6 +209,7 @@ export function getPeriodReport(companyId: string, filter: PeriodFilter): Period
     categories,
     monthly,
     weekly,
+    highlights: { topInflow, topOutflow },
   };
 }
 
