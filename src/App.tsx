@@ -111,7 +111,7 @@ export default function App() {
             Dashboard
           </NavLink>
           <NavLink to="/companies">Şirketler</NavLink>
-          <NavLink to="/import">Excel Yükle</NavLink>
+          <NavLink to="/import">Haftalık Excel</NavLink>
           <NavLink to="/logs">İşlem Logları</NavLink>
           <NavLink to="/account">Hesabım</NavLink>
         </nav>

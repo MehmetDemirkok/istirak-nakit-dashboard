@@ -596,6 +596,58 @@ table.data tr:hover td {
   color: var(--muted);
 }
 
+.import-flow-card {
+  padding: 1rem 1.15rem;
+}
+
+.import-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.import-steps li {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+
+.import-step-num {
+  flex: 0 0 auto;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.import-steps strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--charcoal);
+}
+
+.import-steps p {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .import-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
 .alert {
   padding: 0.75rem 0.9rem;
   border-radius: 8px;

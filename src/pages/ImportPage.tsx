@@ -129,9 +129,10 @@ export default function ImportPage({
     <>
       <div className="topbar">
         <div>
-          <h2>Excel İçe Aktarma</h2>
+          <h2>Haftalık Excel yükleme</h2>
           <p>
-            Dönem seçip dosya yükleyin. Sistemdeki tüm yüklenen Excel’ler aşağıda listelenir.
+            Nakit akış Excel’leri genelde mail ile haftalık gelir. Dosyayı buraya yükleyin;
+            sistem <strong>NAKİT AKIŞ-Haftalık</strong> sayfasını okur.
           </p>
         </div>
         <div className="toolbar">
@@ -145,8 +146,34 @@ export default function ImportPage({
         <div className="card panel empty">Önce Şirketler ekranından bir iştirak ekleyin.</div>
       ) : (
         <>
+          <div className="card panel import-flow-card" style={{ marginBottom: '1rem' }}>
+            <ol className="import-steps">
+              <li>
+                <span className="import-step-num">1</span>
+                <div>
+                  <strong>Mail’den Excel’i alın</strong>
+                  <p>Haftalık nakit akış dosyası (.xlsx)</p>
+                </div>
+              </li>
+              <li>
+                <span className="import-step-num">2</span>
+                <div>
+                  <strong>İştirak ve ayı seçin</strong>
+                  <p>Dosyanın ait olduğu ay (haftalar o aya yazılır)</p>
+                </div>
+              </li>
+              <li>
+                <span className="import-step-num">3</span>
+                <div>
+                  <strong>Yükleyin</strong>
+                  <p>Aynı ay tekrar yüklenirse o ayın haftalık verisi güncellenir</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
           <div className="card panel" style={{ marginBottom: '1rem' }}>
-            <h3 style={{ marginTop: 0 }}>Yeni Excel yükle</h3>
+            <h3 style={{ marginTop: 0 }}>Yeni haftalık Excel yükle</h3>
             <div className="form-grid" style={{ marginBottom: '1rem' }}>
               <div className="field">
                 <label>İştirak</label>
@@ -169,7 +196,7 @@ export default function ImportPage({
                 </select>
               </div>
               <div className="field">
-                <label>Ay</label>
+                <label>Bu haftalık dosya hangi aya ait?</label>
                 <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
                   {MONTHS.map((m, i) => (
                     <option key={m} value={i}>
@@ -181,8 +208,11 @@ export default function ImportPage({
             </div>
 
             <div className="alert warn" style={{ marginBottom: '1rem' }}>
-              Yüklenecek dönem: <strong>{MONTHS[month]} {year}</strong>. Dosya bu şirketin bu ayına
-              kaydedilir; diğer aylar korunur.
+              <strong>Haftalık veri · {MONTHS[month]} {year}</strong>
+              <div style={{ marginTop: '0.35rem' }}>
+                Dosyadaki haftalık kolonlar (HAFTA …) seçilen aya kaydedilir; diğer aylar korunur.
+                Sayfa adı tercihen <strong>NAKİT AKIŞ-Haftalık</strong> olmalıdır.
+              </div>
             </div>
 
             <div
@@ -199,13 +229,13 @@ export default function ImportPage({
               }}
             >
               <p style={{ fontSize: '1.05rem', color: 'var(--charcoal)', fontWeight: 600 }}>
-                .xlsx dosyasını sürükleyip bırakın
+                Haftalık .xlsx dosyasını sürükleyip bırakın
               </p>
               <p>
-                {MONTHS[month]} {year} verisi olarak işlenecek
+                Mail’den gelen nakit akış Excel’i · {MONTHS[month]} {year} olarak işlenecek
               </p>
               <label className="btn btn-primary" style={{ display: 'inline-block', marginTop: '0.75rem' }}>
-                {busy ? 'İşleniyor…' : 'Dosya Seç'}
+                {busy ? 'İşleniyor…' : 'Excel Seç'}
                 <input
                   type="file"
                   accept=".xlsx"
@@ -223,13 +253,21 @@ export default function ImportPage({
                   <strong>{result.message}</strong>
                 </div>
                 <div style={{ marginTop: '0.4rem' }}>
-                  Dönem: {MONTHS[result.month]} {result.year} · Satır: {result.lineCount} · Hafta:{' '}
+                  Dönem: {MONTHS[result.month]} {result.year} · Satır: {result.lineCount} · Haftalık kolon:{' '}
                   {result.weekCount}
                 </div>
                 {result.summary && (
                   <div style={{ marginTop: '0.4rem' }}>
                     Dosya özeti — Gelir: {formatMoney(result.summary.totalInflowYear)} · Gider:{' '}
                     {formatMoney(result.summary.totalOutflowYear)}
+                    {result.summary.lastBalance != null && (
+                      <> · Bakiye: {formatMoney(result.summary.lastBalance)}</>
+                    )}
+                  </div>
+                )}
+                {Array.isArray(result.warnings) && result.warnings.length > 0 && (
+                  <div style={{ marginTop: '0.4rem', fontSize: '0.9rem' }}>
+                    Uyarılar: {result.warnings.join(' · ')}
                   </div>
                 )}
                 {result.status === 'ok' && result.dashboardPath && (
@@ -246,11 +284,11 @@ export default function ImportPage({
           <section className="card panel">
             <div className="toolbar" style={{ justifyContent: 'space-between', marginBottom: '0.85rem' }}>
               <div>
-                <h3 style={{ margin: 0 }}>Sistemdeki Excel yüklemeleri</h3>
+                <h3 style={{ margin: 0 }}>Yüklenen haftalık Excel’ler</h3>
                 <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
                   {importsBusy
                     ? 'Yükleniyor…'
-                    : `${filtered.length} kayıt${search || filterCompany !== 'all' || filterStatus !== 'all' ? ' (filtreli)' : ''}`}
+                    : `${filtered.length} kayıt${search || filterCompany !== 'all' || filterStatus !== 'all' ? ' (filtreli)' : ''} · mail’den gelen dosyaların arşivi`}
                 </p>
               </div>
             </div>
