@@ -476,24 +476,62 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
     fontFace: 'Arial',
   });
 
-  const pieData = categories
-    .filter((c) => c.period > 0 || c.monthly > 0 || c.yearly > 0)
+  const pieColors = [navy, orange, teal, '6366F1', 'E11D48', 'CA8A04', '64748B', '0891B2', '7C3AED'];
+  const pieCats = categories
     .map((c) => ({
       name: c.shortLabel,
-      labels: [c.shortLabel],
-      values: [filter.month == null ? c.yearly : c.period],
-    }));
+      value: filter.month == null ? c.yearly : c.period,
+    }))
+    .filter((c) => c.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const pieTotal = pieCats.reduce((s, c) => s + c.value, 0) || 1;
 
-  if (pieData.length) {
-    slide.addChart(pptx.charts.PIE, pieData, {
-      x: rightX + 0.1,
-      y: 5.15,
-      w: rightW - 0.2,
-      h: 1.95,
-      showPercent: true,
-      showLegend: true,
-      legendPos: 'b',
-      chartColors: [navy, orange, teal, '6366F1', 'E11D48', 'CA8A04', '64748B', '0891B2', '7C3AED'],
+  if (pieCats.length) {
+    // On-slice % labels break in small PPTX pies — keep chart clean, show % in side legend
+    slide.addChart(
+      pptx.charts.PIE,
+      [
+        {
+          name: 'Gider',
+          labels: pieCats.map((c) => c.name),
+          values: pieCats.map((c) => c.value),
+        },
+      ],
+      {
+        x: rightX + 0.05,
+        y: 5.12,
+        w: 1.95,
+        h: 2.0,
+        showPercent: false,
+        showValue: false,
+        showLabel: false,
+        showLegend: false,
+        chartColors: pieColors,
+      },
+    );
+
+    pieCats.forEach((c, i) => {
+      const pct = ((c.value / pieTotal) * 100).toFixed(0);
+      const y = 5.18 + i * 0.2;
+      if (y > 7.05) return;
+      const color = pieColors[i % pieColors.length];
+      slide.addShape(pptx.shapes.RECTANGLE, {
+        x: rightX + 2.05,
+        y: y + 0.04,
+        w: 0.12,
+        h: 0.12,
+        fill: { color },
+      });
+      slide.addText(`${c.name}  ${pct}%`, {
+        x: rightX + 2.24,
+        y,
+        w: 1.55,
+        h: 0.2,
+        fontSize: 8,
+        color: charcoal,
+        fontFace: 'Arial',
+        valign: 'middle',
+      });
     });
   }
 
