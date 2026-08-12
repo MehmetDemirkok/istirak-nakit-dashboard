@@ -45,7 +45,6 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
 
   const monthlyBurn = filter.month == null ? kpis.totalOutflow / 12 : kpis.totalOutflow;
   const runwayMonths = monthlyBurn > 0 ? kpis.balance / monthlyBurn : null;
-
   const topInflow = highlights.topInflow;
   const topOutflow = highlights.topOutflow;
 
@@ -62,6 +61,7 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
   const teal = '0D9488';
   const light = 'F4F6F8';
   const white = 'FFFFFF';
+  const muted = '667788';
 
   const slide = pptx.addSlide();
   slide.addShape(pptx.shapes.RECTANGLE, {
@@ -72,49 +72,53 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
     fill: { color: light },
   });
 
+  // ── Header ──────────────────────────────────────────────
   slide.addShape(pptx.shapes.RECTANGLE, {
     x: 0,
     y: 0,
     w: 13.333,
-    h: 0.7,
+    h: 0.58,
     fill: { color: navy },
   });
   slide.addText(`${company.name.toUpperCase()}  •  ${report.label.toUpperCase()}  •  HAFTALIK VERİ`, {
-    x: 0.3,
-    y: 0.15,
-    w: 10.5,
-    h: 0.4,
-    fontSize: 14,
+    x: 0.28,
+    y: 0.12,
+    w: 10.6,
+    h: 0.34,
+    fontSize: 13,
     bold: true,
     color: white,
     fontFace: 'Arial',
   });
   slide.addText('NAKİT AKIŞ', {
-    x: 11.2,
-    y: 0.18,
-    w: 1.8,
-    h: 0.35,
+    x: 11.1,
+    y: 0.14,
+    w: 1.95,
+    h: 0.3,
     fontSize: 11,
     color: white,
     align: 'right',
     fontFace: 'Arial',
   });
 
+  // ── LEFT: Profile card ───────────────────────────────────
+  const leftX = 0.22;
+  const leftW = 3.55;
   slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
-    x: 0.25,
-    y: 0.9,
-    w: 3.4,
-    h: 3.2,
+    x: leftX,
+    y: 0.75,
+    w: leftW,
+    h: 3.85,
     fill: { color: white },
-    shadow: { type: 'outer', color: '000000', blur: 4, opacity: 0.08, offset: 1 },
-    rectRadius: 0.08,
+    shadow: { type: 'outer', color: '000000', blur: 3, opacity: 0.07, offset: 1 },
+    rectRadius: 0.06,
   });
   slide.addText(company.name, {
-    x: 0.4,
-    y: 1.0,
-    w: 3.1,
-    h: 0.35,
-    fontSize: 14,
+    x: leftX + 0.16,
+    y: 0.88,
+    w: leftW - 0.32,
+    h: 0.36,
+    fontSize: 13,
     bold: true,
     color: charcoal,
     fontFace: 'Arial',
@@ -131,36 +135,99 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
     ['Kredi Durumu', profile.credits || '—'],
     ['Patent', profile.patents || '—'],
   ];
-
   slide.addTable(
     profileRows.map(([k, v]) => [
-      { text: k, options: { fontSize: 9, color: '667788', fontFace: 'Arial' } },
+      { text: k, options: { fontSize: 9, color: muted, fontFace: 'Arial' } },
       { text: v, options: { fontSize: 9, color: charcoal, bold: true, fontFace: 'Arial' } },
     ]),
     {
-      x: 0.4,
-      y: 1.4,
-      w: 3.1,
-      colW: [1.4, 1.7],
+      x: leftX + 0.16,
+      y: 1.3,
+      w: leftW - 0.32,
+      colW: [1.35, 1.85],
       border: [{ type: 'none' }, { type: 'none' }, { type: 'none' }, { type: 'none' }],
       fontFace: 'Arial',
     },
   );
 
+  // ── LEFT: 2×2 KPI cards ──────────────────────────────────
+  const kpiCards = [
+    { label: 'Toplam Gelir', value: money(kpis.totalInflow), color: navy, hint: 'Haftalık' },
+    { label: 'Toplam Gider', value: money(kpis.totalOutflow), color: orange, hint: 'Haftalık' },
+    { label: 'Net Nakit', value: money(kpis.net), color: navy, hint: report.label },
+    { label: 'Nakit Bakiye', value: money(kpis.balance), color: orange, hint: 'Dönem sonu' },
+  ];
+  const kpiW = (leftW - 0.12) / 2;
+  const kpiH = 1.18;
+  const kpiY0 = 4.75;
+  kpiCards.forEach((k, i) => {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const x = leftX + col * (kpiW + 0.12);
+    const y = kpiY0 + row * (kpiH + 0.12);
+    slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
+      x,
+      y,
+      w: kpiW,
+      h: kpiH,
+      fill: { color: white },
+      shadow: { type: 'outer', color: '000000', blur: 3, opacity: 0.07, offset: 1 },
+      rectRadius: 0.05,
+    });
+    slide.addShape(pptx.shapes.RECTANGLE, {
+      x,
+      y,
+      w: 0.09,
+      h: kpiH,
+      fill: { color: k.color },
+    });
+    slide.addText(k.label, {
+      x: x + 0.18,
+      y: y + 0.12,
+      w: kpiW - 0.28,
+      h: 0.22,
+      fontSize: 9,
+      color: muted,
+      fontFace: 'Arial',
+    });
+    slide.addText(k.value, {
+      x: x + 0.18,
+      y: y + 0.4,
+      w: kpiW - 0.28,
+      h: 0.36,
+      fontSize: 12,
+      bold: true,
+      color: charcoal,
+      fontFace: 'Arial',
+    });
+    slide.addText(k.hint, {
+      x: x + 0.18,
+      y: y + 0.82,
+      w: kpiW - 0.28,
+      h: 0.2,
+      fontSize: 8,
+      color: muted,
+      fontFace: 'Arial',
+    });
+  });
+
+  // ── MIDDLE: Gider Özeti table ────────────────────────────
+  const midX = 3.95;
+  const midW = 5.0;
   slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
-    x: 0.25,
-    y: 4.25,
-    w: 3.4,
-    h: 3.0,
+    x: midX,
+    y: 0.75,
+    w: midW,
+    h: 4.0,
     fill: { color: white },
-    shadow: { type: 'outer', color: '000000', blur: 4, opacity: 0.08, offset: 1 },
-    rectRadius: 0.08,
+    shadow: { type: 'outer', color: '000000', blur: 3, opacity: 0.07, offset: 1 },
+    rectRadius: 0.06,
   });
   slide.addText('Gider Özeti', {
-    x: 0.4,
-    y: 4.35,
-    w: 3.1,
-    h: 0.3,
+    x: midX + 0.16,
+    y: 0.86,
+    w: midW - 0.32,
+    h: 0.28,
     fontSize: 12,
     bold: true,
     color: charcoal,
@@ -188,18 +255,18 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
   categories.forEach((c, i) => {
     const bg = i % 2 === 0 ? 'F8FAFC' : white;
     tableRows.push([
-      { text: c.shortLabel, options: { fontSize: 7, color: charcoal, fill: { color: bg } } },
+      { text: c.shortLabel, options: { fontSize: 8, color: charcoal, fill: { color: bg } } },
       {
         text: shortMoney(c.weekly),
-        options: { fontSize: 7, color: charcoal, align: 'right', fill: { color: bg } },
+        options: { fontSize: 8, color: charcoal, align: 'right', fill: { color: bg } },
       },
       {
         text: shortMoney(c.monthly),
-        options: { fontSize: 7, color: charcoal, align: 'right', fill: { color: bg } },
+        options: { fontSize: 8, color: charcoal, align: 'right', fill: { color: bg } },
       },
       {
         text: shortMoney(c.yearly),
-        options: { fontSize: 7, color: charcoal, align: 'right', fill: { color: bg } },
+        options: { fontSize: 8, color: charcoal, align: 'right', fill: { color: bg } },
       },
     ]);
   });
@@ -237,116 +304,79 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
   ]);
 
   slide.addTable(tableRows as never, {
-    x: 0.35,
-    y: 4.7,
-    w: 3.2,
-    colW: [1.15, 0.68, 0.68, 0.69],
-    border: [{ pt: 0.5, color: 'E2E8F0' }],
+    x: midX + 0.14,
+    y: 1.2,
+    w: midW - 0.28,
+    colW: [1.85, 0.95, 0.95, 0.97],
+    border: [{ pt: 0.4, color: 'E2E8F0' }],
     fontFace: 'Arial',
   });
 
-  const kpiCards = [
-    { label: 'Gelir (Haftalık)', value: money(kpis.totalInflow), color: navy },
-    { label: 'Gider (Haftalık)', value: money(kpis.totalOutflow), color: orange },
-    { label: 'Net Nakit', value: money(kpis.net), color: charcoal },
-    { label: 'Bakiye', value: money(kpis.balance), color: teal },
-  ];
-  kpiCards.forEach((k, i) => {
-    const x = 3.9 + i * 2.3;
-    slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
-      x,
-      y: 0.9,
-      w: 2.15,
-      h: 1.0,
-      fill: { color: white },
-      shadow: { type: 'outer', color: '000000', blur: 4, opacity: 0.08, offset: 1 },
-      rectRadius: 0.08,
-    });
-    slide.addShape(pptx.shapes.RECTANGLE, {
-      x,
-      y: 0.9,
-      w: 0.1,
-      h: 1.0,
-      fill: { color: k.color },
-    });
-    slide.addText(k.label, {
-      x: x + 0.2,
-      y: 1.0,
-      w: 1.8,
-      h: 0.25,
-      fontSize: 9,
-      color: '667788',
-      fontFace: 'Arial',
-    });
-    slide.addText(k.value, {
-      x: x + 0.2,
-      y: 1.3,
-      w: 1.8,
-      h: 0.4,
-      fontSize: 14,
-      bold: true,
-      color: charcoal,
-      fontFace: 'Arial',
-    });
-  });
-
-  const pieData = categories
-    .filter((c) => c.period > 0 || c.monthly > 0 || c.yearly > 0)
-    .map((c) => ({
-      name: c.shortLabel,
-      labels: [c.shortLabel],
-      values: [filter.month == null ? c.yearly : c.monthly],
-    }));
-
+  // ── MIDDLE: Monthly inflow/outflow chart ─────────────────
   slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
-    x: 3.9,
-    y: 2.1,
-    w: 4.5,
-    h: 3.1,
+    x: midX,
+    y: 4.9,
+    w: midW,
+    h: 2.35,
     fill: { color: white },
-    shadow: { type: 'outer', color: '000000', blur: 4, opacity: 0.08, offset: 1 },
-    rectRadius: 0.08,
+    shadow: { type: 'outer', color: '000000', blur: 3, opacity: 0.07, offset: 1 },
+    rectRadius: 0.06,
   });
-  slide.addText('Gider Dağılımı', {
-    x: 4.05,
-    y: 2.2,
-    w: 4.2,
-    h: 0.3,
+  slide.addText('Nakit Giriş / Çıkış Bilgisi (Aylık)', {
+    x: midX + 0.16,
+    y: 5.0,
+    w: midW - 0.32,
+    h: 0.26,
     fontSize: 11,
     bold: true,
     color: charcoal,
     fontFace: 'Arial',
   });
-
-  if (pieData.length) {
-    slide.addChart(pptx.charts.PIE, pieData, {
-      x: 4.1,
-      y: 2.55,
-      w: 4.1,
-      h: 2.5,
-      showPercent: true,
+  slide.addChart(
+    pptx.charts.BAR,
+    [
+      {
+        name: 'Giriş',
+        labels: monthly.map((m) => m.month.slice(0, 3)),
+        values: monthly.map((m) => m.inflow),
+      },
+      {
+        name: 'Çıkış',
+        labels: monthly.map((m) => m.month.slice(0, 3)),
+        values: monthly.map((m) => m.outflow),
+      },
+    ],
+    {
+      x: midX + 0.1,
+      y: 5.28,
+      w: midW - 0.2,
+      h: 1.85,
+      barGrouping: 'clustered',
+      chartColors: [navy, orange],
       showLegend: true,
       legendPos: 'b',
-      chartColors: [navy, orange, teal, '6366F1', 'E11D48', 'CA8A04', '64748B', '0891B2', '7C3AED'],
-    });
-  }
+      valAxisHidden: false,
+    },
+  );
 
-  // Insight cards (dashboard revizyonu): önemli giriş/çıkış + Runaway
+  // ── RIGHT: Dönem Özeti (mevcut içerik) ───────────────────
+  const rightX = 9.15;
+  const rightW = 3.95;
   slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
-    x: 8.6,
-    y: 2.1,
-    w: 4.5,
-    h: 3.1,
+    x: rightX,
+    y: 0.75,
+    w: rightW,
+    h: 3.85,
     fill: { color: white },
-    shadow: { type: 'outer', color: '000000', blur: 4, opacity: 0.08, offset: 1 },
-    rectRadius: 0.08,
+    shadow: { type: 'outer', color: '000000', blur: 3, opacity: 0.07, offset: 1 },
+    rectRadius: 0.06,
   });
   slide.addText('Dönem Özeti', {
-    x: 8.75,
-    y: 2.2,
-    w: 4.2,
+    x: rightX + 0.16,
+    y: 0.88,
+    w: rightW - 0.32,
     h: 0.28,
-    fontSize: 11,
+    fontSize: 12,
     bold: true,
     color: charcoal,
     fontFace: 'Arial',
@@ -379,90 +409,93 @@ export async function buildPresentation(companyId: string, filter: PeriodFilter)
   ];
 
   insightCards.forEach((card, i) => {
-    const y = 2.55 + i * 0.85;
+    const y = 1.3 + i * 1.05;
+    slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
+      x: rightX + 0.16,
+      y,
+      w: rightW - 0.32,
+      h: 0.92,
+      fill: { color: 'F8FAFC' },
+      rectRadius: 0.04,
+    });
     slide.addShape(pptx.shapes.RECTANGLE, {
-      x: 8.75,
+      x: rightX + 0.16,
       y,
       w: 0.08,
-      h: 0.72,
+      h: 0.92,
       fill: { color: card.accent },
     });
     slide.addText(card.label, {
-      x: 8.95,
-      y,
-      w: 3.9,
-      h: 0.22,
+      x: rightX + 0.36,
+      y: y + 0.08,
+      w: rightW - 0.6,
+      h: 0.2,
       fontSize: 9,
-      color: '667788',
+      color: muted,
       fontFace: 'Arial',
     });
     slide.addText(card.title, {
-      x: 8.95,
-      y: y + 0.2,
-      w: 3.9,
-      h: 0.26,
+      x: rightX + 0.36,
+      y: y + 0.3,
+      w: rightW - 0.6,
+      h: 0.28,
       fontSize: 13,
       bold: true,
       color: charcoal,
       fontFace: 'Arial',
     });
     slide.addText(card.detail, {
-      x: 8.95,
-      y: y + 0.46,
-      w: 3.9,
+      x: rightX + 0.36,
+      y: y + 0.6,
+      w: rightW - 0.6,
       h: 0.22,
       fontSize: 9,
-      color: '667788',
+      color: muted,
       fontFace: 'Arial',
     });
   });
 
+  // ── RIGHT: Gider dağılımı pie ────────────────────────────
   slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
-    x: 3.9,
-    y: 5.35,
-    w: 9.2,
-    h: 1.9,
+    x: rightX,
+    y: 4.75,
+    w: rightW,
+    h: 2.5,
     fill: { color: white },
-    shadow: { type: 'outer', color: '000000', blur: 4, opacity: 0.08, offset: 1 },
-    rectRadius: 0.08,
+    shadow: { type: 'outer', color: '000000', blur: 3, opacity: 0.07, offset: 1 },
+    rectRadius: 0.06,
   });
-  slide.addText('Aylık Nakit Giriş / Çıkış', {
-    x: 4.05,
-    y: 5.4,
-    w: 8,
-    h: 0.28,
+  slide.addText(filter.month == null ? 'Yıllık Gider Dağılımı' : 'Gider Dağılımı', {
+    x: rightX + 0.16,
+    y: 4.86,
+    w: rightW - 0.32,
+    h: 0.26,
     fontSize: 11,
     bold: true,
     color: charcoal,
     fontFace: 'Arial',
   });
 
-  slide.addChart(
-    pptx.charts.BAR,
-    [
-      {
-        name: 'Giriş',
-        labels: monthly.map((m) => m.month.slice(0, 3)),
-        values: monthly.map((m) => m.inflow),
-      },
-      {
-        name: 'Çıkış',
-        labels: monthly.map((m) => m.month.slice(0, 3)),
-        values: monthly.map((m) => m.outflow),
-      },
-    ],
-    {
-      x: 4.05,
-      y: 5.7,
-      w: 8.9,
-      h: 1.45,
-      barGrouping: 'clustered',
-      chartColors: [navy, orange],
+  const pieData = categories
+    .filter((c) => c.period > 0 || c.monthly > 0 || c.yearly > 0)
+    .map((c) => ({
+      name: c.shortLabel,
+      labels: [c.shortLabel],
+      values: [filter.month == null ? c.yearly : c.period],
+    }));
+
+  if (pieData.length) {
+    slide.addChart(pptx.charts.PIE, pieData, {
+      x: rightX + 0.1,
+      y: 5.15,
+      w: rightW - 0.2,
+      h: 1.95,
+      showPercent: true,
       showLegend: true,
-      legendPos: 'r',
-      valAxisHidden: false,
-    },
-  );
+      legendPos: 'b',
+      chartColors: [navy, orange, teal, '6366F1', 'E11D48', 'CA8A04', '64748B', '0891B2', '7C3AED'],
+    });
+  }
 
   const buf = (await pptx.write({ outputType: 'nodebuffer' })) as Buffer;
   return buf;

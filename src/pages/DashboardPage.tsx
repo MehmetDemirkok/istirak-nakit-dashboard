@@ -76,6 +76,7 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
   );
   const [exporting, setExporting] = useState<string | null>(null);
   const [periodReady, setPeriodReady] = useState(!!yearFromUrl);
+  const [tableSort, setTableSort] = useState('period-desc');
 
   useEffect(() => {
     if (params.get('company')) setCompanyId(params.get('company')!);
@@ -264,15 +265,49 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
   const categoryBars = useMemo(() => {
     const cats = data?.categories || [];
     return [...cats]
-      .map((c: any) => ({
+      .map((c: any, i: number) => ({
         key: c.key,
         name: c.shortLabel,
         period: c.period ?? c.monthly ?? 0,
         yearly: c.yearly ?? 0,
         monthly: c.monthly ?? 0,
+        colorIndex: i,
       }))
       .sort((a, b) => b.period - a.period);
   }, [data]);
+
+  const sortedCategoryRows = useMemo(() => {
+    const rows = [...categoryBars];
+    const cmp = (a: number, b: number) => a - b;
+    switch (tableSort) {
+      case 'period-asc':
+        rows.sort((a, b) => cmp(a.period, b.period));
+        break;
+      case 'monthly-desc':
+        rows.sort((a, b) => cmp(b.monthly, a.monthly));
+        break;
+      case 'monthly-asc':
+        rows.sort((a, b) => cmp(a.monthly, b.monthly));
+        break;
+      case 'yearly-desc':
+        rows.sort((a, b) => cmp(b.yearly, a.yearly));
+        break;
+      case 'yearly-asc':
+        rows.sort((a, b) => cmp(a.yearly, b.yearly));
+        break;
+      case 'name-asc':
+        rows.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+        break;
+      case 'name-desc':
+        rows.sort((a, b) => b.name.localeCompare(a.name, 'tr'));
+        break;
+      case 'period-desc':
+      default:
+        rows.sort((a, b) => cmp(b.period, a.period));
+        break;
+    }
+    return rows;
+  }, [categoryBars, tableSort]);
 
   const insights = useMemo(() => {
     if (!data?.kpis && !data?.totals) return null;
@@ -614,38 +649,24 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
           <section className="card dash-panel" style={{ marginTop: '1rem' }}>
             <div className="dash-panel-head">
               <div>
-                <h3>Kategori detayı</h3>
-                <p>Dönem tutarlarına göre sıralı</p>
-              </div>
-            </div>
-            <div className="dash-cat-list dash-cat-list-wide">
-              {categoryBars.map((c, i) => {
-                const max = categoryBars[0]?.period || 1;
-                const width = Math.max(2, Math.min(100, (Math.abs(c.period) / Math.abs(max || 1)) * 100));
-                return (
-                  <div key={c.key} className="dash-cat-row">
-                    <div className="dash-cat-meta">
-                      <span className="dash-cat-name">
-                        <i style={{ background: CAT_COLORS[i % CAT_COLORS.length] }} />
-                        {c.name}
-                      </span>
-                      <span className="dash-cat-val">{formatMoney(c.period)}</span>
-                    </div>
-                    <div className="dash-cat-bar">
-                      <span style={{ width: `${width}%`, background: CAT_COLORS[i % CAT_COLORS.length] }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="card dash-panel" style={{ marginTop: '1rem' }}>
-            <div className="dash-panel-head">
-              <div>
                 <h3>Kalem tablosu</h3>
                 <p>Dönem / aylık / yıllık özet</p>
               </div>
+              <DownSelect
+                ariaLabel="Sıralama"
+                value={tableSort}
+                options={[
+                  { value: 'period-desc', label: 'Dönem · yüksek → düşük' },
+                  { value: 'period-asc', label: 'Dönem · düşük → yüksek' },
+                  { value: 'monthly-desc', label: 'Aylık · yüksek → düşük' },
+                  { value: 'monthly-asc', label: 'Aylık · düşük → yüksek' },
+                  { value: 'yearly-desc', label: 'Yıllık · yüksek → düşük' },
+                  { value: 'yearly-asc', label: 'Yıllık · düşük → yüksek' },
+                  { value: 'name-asc', label: 'Kalem · A → Z' },
+                  { value: 'name-desc', label: 'Kalem · Z → A' },
+                ]}
+                onChange={setTableSort}
+              />
             </div>
             <div className="dash-table-wrap">
               <table className="data dash-table">
@@ -659,14 +680,15 @@ export default function DashboardPage({ companies }: { companies: Company[] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {categoryBars.map((c, i) => {
+                  {sortedCategoryRows.map((c) => {
                     const share =
                       insights.outflow > 0 ? ((c.period / insights.outflow) * 100).toFixed(1) : '0.0';
+                    const color = CAT_COLORS[c.colorIndex % CAT_COLORS.length];
                     return (
                       <tr key={c.key}>
                         <td>
                           <span className="dash-table-cat">
-                            <i style={{ background: CAT_COLORS[i % CAT_COLORS.length] }} />
+                            <i style={{ background: color }} />
                             {c.name}
                           </span>
                         </td>
