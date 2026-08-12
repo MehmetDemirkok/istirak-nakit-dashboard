@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { api, type AuthUser, type Company } from './api';
+import { api, type AuthUser, type Company, type UpdateCheck } from './api';
 import AccountPage from './pages/AccountPage';
 import CompaniesPage from './pages/CompaniesPage';
 import DashboardPage from './pages/DashboardPage';
@@ -29,6 +29,8 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheck | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const navigate = useNavigate();
 
   const refresh = async () => {
@@ -62,6 +64,28 @@ export default function App() {
 
   useEffect(() => {
     if (user) refresh();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const r = await api.checkUpdate();
+        if (!cancelled) {
+          setUpdateInfo(r);
+          if (r.updateAvailable) setBannerDismissed(false);
+        }
+      } catch {
+        /* çevrimdışı */
+      }
+    };
+    run();
+    const id = window.setInterval(run, 30 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [user?.id]);
 
   const logout = async () => {
@@ -98,6 +122,7 @@ export default function App() {
   }
 
   const displayName = user.displayName || user.username;
+  const showUpdateBanner = !!updateInfo?.updateAvailable && !bannerDismissed;
 
   return (
     <div className="app-shell">
@@ -113,7 +138,10 @@ export default function App() {
           <NavLink to="/companies">Şirketler</NavLink>
           <NavLink to="/import">Haftalık Excel</NavLink>
           <NavLink to="/logs">İşlem Logları</NavLink>
-          <NavLink to="/account">Hesabım</NavLink>
+          <NavLink to="/account">
+            Hesabım
+            {updateInfo?.updateAvailable ? <span className="nav-dot" aria-label="Güncelleme var" /> : null}
+          </NavLink>
         </nav>
         <div className="sidebar-foot">
           <button className="sidebar-user sidebar-user-btn" type="button" onClick={() => navigate('/account')}>
@@ -133,6 +161,12 @@ export default function App() {
           </button>
           <div className="sidebar-note">
             Veriler bu bilgisayarda kalır
+            {updateInfo?.localVersion ? (
+              <>
+                <br />
+                v{updateInfo.localVersion}
+              </>
+            ) : null}
             {error && (
               <>
                 <br />
@@ -143,6 +177,25 @@ export default function App() {
         </div>
       </aside>
       <main className="main">
+        {showUpdateBanner && (
+          <div className="update-banner" role="status">
+            <div>
+              <strong>Uygulamanın yeni sürümü var</strong>
+              <span>
+                {' '}
+                · v{updateInfo!.remoteVersion} (mevcut v{updateInfo!.localVersion})
+              </span>
+            </div>
+            <div className="update-banner-actions">
+              <button type="button" className="btn btn-primary" onClick={() => navigate('/account')}>
+                Güncelle
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setBannerDismissed(true)}>
+                Sonra
+              </button>
+            </div>
+          </div>
+        )}
         <Routes>
           <Route path="/" element={<DashboardPage companies={companies} />} />
           <Route

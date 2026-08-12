@@ -7,6 +7,9 @@ data/avatars
 data/avatars/**
 data/app.db
 data/app.db-*
+data/_update_tmp
+data/_update_tmp/**
+data/update-token.txt
 .DS_Store
 *.log
 .env

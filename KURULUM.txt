@@ -21,5 +21,10 @@ Yazılımcı olmanıza gerek yok.
 4) Sonraki açılışlar
    Masaüstündeki "İştirak Nakit Dashboard" kısayoluna çift tıklayın
 
+5) Güncelleme
+   Uygulama içinde Hesabım → “Güncelleme Kontrol Et / Güncelle”
+   Repo özel ise: data/update-token.txt dosyasına GitHub token yazın
+   (Contents: Read yetkili fine-grained token). Verileriniz korunur.
+
 Giriş: admin / Admin123!
 Adres: http://127.0.0.1:8787

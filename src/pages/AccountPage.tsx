@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { api, type AuthUser } from '../api';
+import { api, type AuthUser, type UpdateCheck } from '../api';
 
 export default function AccountPage({
   user,
@@ -17,11 +17,31 @@ export default function AccountPage({
   const [previewBust, setPreviewBust] = useState(Date.now());
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheck | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [updateErr, setUpdateErr] = useState<string | null>(null);
+
   useEffect(() => {
     setFirstName(user.firstName || '');
     setLastName(user.lastName || '');
     setEmail(user.email || '');
   }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .checkUpdate()
+      .then((r) => {
+        if (!cancelled) setUpdateInfo(r);
+      })
+      .catch(() => {
+        /* sessiz — çevrimdışı olabilir */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -73,6 +93,65 @@ export default function AccountPage({
     }
   };
 
+  const refreshUpdate = async () => {
+    setUpdateBusy(true);
+    setUpdateErr(null);
+    setUpdateMsg(null);
+    try {
+      const r = await api.checkUpdate();
+      setUpdateInfo(r);
+      if (!r.ok) setUpdateErr(r.error || 'Kontrol başarısız');
+      else if (!r.updateAvailable) setUpdateMsg(`Güncelsiniz (v${r.localVersion})`);
+      else setUpdateMsg(`Yeni sürüm var: v${r.remoteVersion}`);
+    } catch (ex) {
+      setUpdateErr(ex instanceof Error ? ex.message : 'Kontrol başarısız');
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const runUpdate = async () => {
+    if (
+      !confirm(
+        'Yeni sürüm indirilip kurulacak. Verileriniz (Excel, şirketler, veritabanı) korunur. Devam edilsin mi?',
+      )
+    ) {
+      return;
+    }
+    setUpdateBusy(true);
+    setUpdateErr(null);
+    setUpdateMsg('Güncelleme indiriliyor ve kuruluyor… Bu birkaç dakika sürebilir.');
+    try {
+      const r = await api.applyUpdate();
+      if (!r.ok) {
+        setUpdateErr(r.error || 'Güncelleme başarısız');
+        setUpdateMsg(null);
+        return;
+      }
+      setUpdateMsg(r.message);
+      setUpdateInfo((prev) =>
+        prev
+          ? {
+              ...prev,
+              localVersion: r.localVersion,
+              remoteVersion: r.remoteVersion,
+              updateAvailable: false,
+            }
+          : prev,
+      );
+      if (r.restartScheduled) {
+        setUpdateMsg(
+          `${r.message} Tarayıcı birkaç saniye içinde yanıt vermeyebilir; Baslat ile yeniden açın.`,
+        );
+      }
+    } catch (ex) {
+      setUpdateErr(ex instanceof Error ? ex.message : 'Güncelleme başarısız');
+      setUpdateMsg(null);
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
   const photo = user.avatarUrl ? `${user.avatarUrl}?v=${previewBust}` : null;
 
   return (
@@ -80,7 +159,7 @@ export default function AccountPage({
       <div className="topbar">
         <div>
           <h2>Hesabım</h2>
-          <p>Ad, soyad, e-posta ve profil fotoğrafınızı güncelleyin.</p>
+          <p>Ad, soyad, e-posta, profil fotoğrafı ve uygulama güncellemesi.</p>
         </div>
       </div>
 
@@ -158,6 +237,44 @@ export default function AccountPage({
           </form>
         </section>
       </div>
+
+      <section className="card panel" style={{ marginTop: '1rem' }}>
+        <div className="toolbar" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Uygulama güncellemesi</h3>
+            <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
+              GitHub’daki son sürümü kontrol eder. Verileriniz (data klasörü) korunur. Repo özel ise{' '}
+              <code>data/update-token.txt</code> dosyasına Contents: Read yetkili token koyun.
+            </p>
+          </div>
+          <span className="version-pill">
+            v{updateInfo?.localVersion || '…'}
+          </span>
+        </div>
+
+        {updateInfo?.updateAvailable && (
+          <div className="alert warn" style={{ marginTop: '0.85rem' }}>
+            Uygulamanın yeni sürümü var: <strong>v{updateInfo.remoteVersion}</strong> (mevcut:{' '}
+            v{updateInfo.localVersion})
+          </div>
+        )}
+        {updateMsg && <div className="alert ok">{updateMsg}</div>}
+        {updateErr && <div className="alert err">{updateErr}</div>}
+
+        <div className="toolbar" style={{ marginTop: '0.85rem' }}>
+          <button className="btn btn-ghost" type="button" disabled={updateBusy} onClick={refreshUpdate}>
+            {updateBusy ? 'Kontrol ediliyor…' : 'Güncelleme Kontrol Et'}
+          </button>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={updateBusy || !updateInfo?.updateAvailable}
+            onClick={runUpdate}
+          >
+            {updateBusy ? 'Güncelleniyor…' : 'Güncelle'}
+          </button>
+        </div>
+      </section>
     </>
   );
 }

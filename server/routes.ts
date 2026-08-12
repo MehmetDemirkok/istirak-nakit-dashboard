@@ -20,6 +20,7 @@ import {
 } from './periodReport.js';
 import { requireAuth } from './authRoutes.js';
 import { activityStats, clearActivities, listActivities } from './activityLog.js';
+import { applyUpdate, checkForUpdate, getLocalVersion } from './updater.js';
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -39,10 +40,25 @@ const upload = multer({
 export const api = Router();
 
 api.get('/health', (_req, res) => {
-  res.json({ ok: true, local: true, bind: '127.0.0.1' });
+  res.json({ ok: true, local: true, bind: '127.0.0.1', version: getLocalVersion() });
 });
 
 api.use(requireAuth);
+
+api.get('/system/version', (_req, res) => {
+  res.json({ version: getLocalVersion() });
+});
+
+api.get('/system/update/check', async (_req, res) => {
+  const result = await checkForUpdate();
+  res.json(result);
+});
+
+api.post('/system/update/apply', async (_req, res) => {
+  const result = await applyUpdate();
+  if (!result.ok) return res.status(500).json(result);
+  res.json(result);
+});
 
 // Companies
 api.get('/companies', (_req, res) => {

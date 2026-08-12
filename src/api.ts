@@ -262,6 +262,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
     }),
+  checkUpdate: () => request<UpdateCheck>('/api/system/update/check'),
+  applyUpdate: () =>
+    request<UpdateApplyResult>('/api/system/update/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }),
+  getVersion: () => request<{ version: string }>('/api/system/version'),
 };
 
 export interface ActivityLog {
@@ -291,6 +299,26 @@ export interface ImportJob {
   month: number | null;
   createdAt: string;
   hasFile: boolean;
+}
+
+export interface UpdateCheck {
+  ok: boolean;
+  localVersion: string;
+  remoteVersion: string | null;
+  updateAvailable: boolean;
+  repo: string;
+  branch: string;
+  error?: string;
+  checkedAt: string;
+}
+
+export interface UpdateApplyResult {
+  ok: boolean;
+  localVersion: string;
+  remoteVersion: string;
+  message: string;
+  restartScheduled: boolean;
+  error?: string;
 }
 
 export function formatMoney(n: number): string {
