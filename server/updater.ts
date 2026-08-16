@@ -119,24 +119,23 @@ async function readRemoteVersion(token: string | null): Promise<{ version: strin
     }
   };
 
-  if (token) {
-    const viaApi = await tryJson(apiUrl, githubHeaders(token));
-    if (viaApi.version) return viaApi;
-  }
-
+  // Public repo first so end users do not need a GitHub token.
   const viaRaw = await tryJson(rawUrl, {
     'User-Agent': 'istirak-nakit-dashboard-updater',
     Accept: 'application/json',
   });
   if (viaRaw.version) return viaRaw;
 
-  if (!token) {
-    const viaPublicApi = await tryJson(apiUrl, githubHeaders(null));
-    if (viaPublicApi.version) return viaPublicApi;
-    return viaPublicApi.httpStatus ? viaPublicApi : viaRaw;
+  const viaPublicApi = await tryJson(apiUrl, githubHeaders(null));
+  if (viaPublicApi.version) return viaPublicApi;
+
+  if (token) {
+    const viaApi = await tryJson(apiUrl, githubHeaders(token));
+    if (viaApi.version) return viaApi;
+    return viaApi;
   }
 
-  return { version: null, httpStatus: viaRaw.httpStatus || 401 };
+  return { version: null, httpStatus: viaPublicApi.httpStatus || viaRaw.httpStatus || 0 };
 }
 
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
@@ -155,7 +154,7 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
         repo: UPDATE_REPO,
         branch: UPDATE_BRANCH,
         error: needsToken
-          ? 'GitHub deposu özel. Güncelleme için data/secrets/github-token.txt dosyasına Contents: Read yetkili bir token koyun.'
+          ? 'GitHub’a ulaşılamadı. İnternet bağlantısını kontrol edin.'
           : `Uzak sürüm okunamadı (HTTP ${remote.httpStatus || 'ağ hatası'})`,
         checkedAt,
       };
@@ -314,10 +313,14 @@ export async function applyUpdate(): Promise<ApplyUpdateResult> {
     ensureDir(extractDir);
 
     const token = getGithubToken();
-    const zipUrl = token
-      ? `https://api.github.com/repos/${UPDATE_REPO}/zipball/${UPDATE_BRANCH}`
-      : `https://github.com/${UPDATE_REPO}/archive/refs/heads/${UPDATE_BRANCH}.zip`;
-    await downloadZip(zipUrl, zipFile, token);
+    // Public archive — no token required. Token is only a fallback.
+    const zipUrl = `https://github.com/${UPDATE_REPO}/archive/refs/heads/${UPDATE_BRANCH}.zip`;
+    const apiZip = `https://api.github.com/repos/${UPDATE_REPO}/zipball/${UPDATE_BRANCH}`;
+    try {
+      await downloadZip(zipUrl, zipFile, null);
+    } catch {
+      await downloadZip(apiZip, zipFile, token);
+    }
     extractZip(zipFile, extractDir);
     const srcRoot = findExtractedRoot(extractDir);
     if (!fs.existsSync(path.join(srcRoot, 'package.json'))) {

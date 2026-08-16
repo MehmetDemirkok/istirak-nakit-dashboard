@@ -33,8 +33,7 @@ Only the admin login is created. Add companies yourself, or optionally run:
   npm run seed:demo
 
 Updates (Account page → Güncelle):
-  Private GitHub repo: put a token in data/secrets/github-token.txt
-  (GitHub → Settings → Developer settings → Fine-grained token, Contents: Read)
+  No GitHub token needed. The app downloads the new version from the public repo.
   Your data/ folder is kept.
 
 WHERE IS MY DATA?  (this computer only — nothing goes to the cloud)

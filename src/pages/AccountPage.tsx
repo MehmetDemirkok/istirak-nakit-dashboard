@@ -216,7 +216,7 @@ export default function AccountPage({
           <div>
             <h3 style={{ margin: 0 }}>Uygulama güncellemesi</h3>
             <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-              GitHub’daki son sürüme bakar. Verileriniz (`data/`) korunur.
+              GitHub’daki son sürüme bakar. Token gerekmez; verileriniz (`data/`) korunur.
             </p>
           </div>
           <span className="version-pill">v{updateInfo?.localVersion || '…'}</span>

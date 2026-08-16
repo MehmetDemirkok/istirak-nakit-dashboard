@@ -1,9 +1,6 @@
 # Secrets
 
-Optional local secrets. Never commit these files.
+Optional. Leave this folder empty.
 
-| File | Purpose |
-|------|---------|
-| `github-token.txt` | Fine-grained GitHub token (Contents: Read) for in-app updates on a private repo |
+In-app updates use the **public** GitHub repo and do not need a token.
 
-Create the file yourself if needed. Leave this folder empty otherwise.

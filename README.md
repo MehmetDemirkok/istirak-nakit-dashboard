@@ -13,7 +13,7 @@ Local web app: turns subsidiary Excel files into a dashboard; exports PPTX / PDF
 Details: **`SETUP.txt`** · First login: `admin` / `Admin123!`  
 A GitHub clone starts **empty** (no companies). Your existing `data/` folder is never overwritten by an update.
 
-In-app updates: **Account → Güncelle**. Private GitHub repos need `data/secrets/github-token.txt` (Contents: Read).
+In-app updates: **Account → Güncelle**. The GitHub repo is public, so users do not need a token. `data/` is never overwritten.
 
 ## Folder map
 
