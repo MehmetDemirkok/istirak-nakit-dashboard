@@ -1,15 +1,25 @@
 node_modules
 dist
 dist-server
-data/uploads
-data/uploads/**
-data/avatars
-data/avatars/**
+
+# Local user data — never commit the live database or uploaded files.
+# A fresh GitHub clone starts empty (only the default admin login is created).
+data/database/*
+!data/database/README.md
 data/app.db
 data/app.db-*
+data/uploads/*
+!data/uploads/README.md
+data/avatars/*
+!data/avatars/README.md
+data/secrets/*
+!data/secrets/README.md
+data/tmp/*
+!data/tmp/README.md
 data/_update_tmp
 data/_update_tmp/**
 data/update-token.txt
+
 .DS_Store
 *.log
 .env

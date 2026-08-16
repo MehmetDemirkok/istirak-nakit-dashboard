@@ -1,30 +1,7 @@
-İŞTİRAK NAKİT AKIŞ DASHBOARD
+ISTIRAK NAKIT AKIS DASHBOARD
 ============================
 
-Yazılımcı olmanıza gerek yok.
+Yazılımcı olmanıza gerek yok. Güncel kurulum: SETUP.txt
 
-1) Node.js kurun (bir kez)
-   https://nodejs.org → LTS indir → kur
-
-2) Bu klasörü bilgisayarınıza kopyalayın
-
-3) TEK DOSYA — çift tıklayın
-   Windows:  Baslat.bat
-   Mac:      Baslat.command
-             (Mac engellerse: sağ tık → Aç)
-
-   Bu dosya:
-   - eksikleri otomatik kurar
-   - uygulamayı açar
-   - masaüstüne kısayol koyar
-
-4) Sonraki açılışlar
-   Masaüstündeki "İştirak Nakit Dashboard" kısayoluna çift tıklayın
-
-5) Güncelleme
-   Uygulama içinde Hesabım → “Güncelleme Kontrol Et / Güncelle”
-   Repo özel ise: data/update-token.txt dosyasına GitHub token yazın
-   (Contents: Read yetkili fine-grained token). Verileriniz korunur.
-
-Giriş: admin / Admin123!
-Adres: http://127.0.0.1:8787
+Windows:  Start.bat
+Mac:      Start.command

@@ -214,6 +214,15 @@ a {
   font-weight: 700;
 }
 
+.update-panel {
+  border: 1px solid #c9d7ea;
+  background: linear-gradient(180deg, #f7fbff, #fff);
+}
+
+.update-panel h3 {
+  color: var(--navy);
+}
+
 .version-pill {
   display: inline-flex;
   align-items: center;
@@ -257,20 +266,61 @@ a {
   vertical-align: middle;
 }
 
+.storage-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid #e8edf4;
+}
+
+.storage-row:first-of-type {
+  border-top: 1px solid #e8edf4;
+}
+
+.storage-row-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.storage-label {
+  font-weight: 650;
+  font-size: 0.92rem;
+}
+
+.storage-path {
+  display: block;
+  margin-top: 0.28rem;
+  padding: 0.28rem 0.45rem;
+  border-radius: 6px;
+  background: #f4f7fb;
+  color: #334155;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.storage-note {
+  margin-top: 0.28rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
 @media (max-width: 900px) {
   .account-layout {
     grid-template-columns: 1fr;
   }
-}
 
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--navy), #1d6fd8);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 0.85rem;
-  flex-shrink: 0;
+  .storage-row {
+    flex-direction: column;
+  }
 }
 
 .sidebar-user-meta {

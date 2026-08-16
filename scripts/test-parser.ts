@@ -1,7 +1,7 @@
 import { parseCashFlowExcel } from '../server/excelParser.js';
 import path from 'node:path';
 
-const file = process.argv[2] || path.join(process.cwd(), 'data', 'samples', 'ornek-nakit-akis.xlsx');
+const file = process.argv[2] || path.join(process.cwd(), 'data', 'samples', 'sample-alfa-energy-2026-august.xlsx');
 
 const result = await parseCashFlowExcel(file);
 console.log(JSON.stringify({

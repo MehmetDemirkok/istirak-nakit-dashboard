@@ -1,13 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { GITHUB_TOKEN_FILE, ROOT_DIR, TMP_DIR } from './db.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const PROJECT_ROOT = path.resolve(__dirname, '..');
+export const PROJECT_ROOT = ROOT_DIR;
 
 /** GitHub repo used for local app updates */
 export const UPDATE_REPO = process.env.UPDATE_REPO || 'MehmetDemirkok/istirak-nakit-dashboard';
@@ -27,14 +26,19 @@ const PRESERVE = new Set([
 function getGithubToken(): string | null {
   const fromEnv = process.env.UPDATE_GITHUB_TOKEN || process.env.GITHUB_TOKEN;
   if (fromEnv?.trim()) return fromEnv.trim();
-  const tokenFile = path.join(PROJECT_ROOT, 'data', 'update-token.txt');
-  try {
-    if (fs.existsSync(tokenFile)) {
-      const t = fs.readFileSync(tokenFile, 'utf8').trim();
-      if (t) return t;
+  const candidates = [
+    GITHUB_TOKEN_FILE,
+    path.join(PROJECT_ROOT, 'data', 'update-token.txt'),
+  ];
+  for (const tokenFile of candidates) {
+    try {
+      if (fs.existsSync(tokenFile)) {
+        const t = fs.readFileSync(tokenFile, 'utf8').trim();
+        if (t) return t;
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
   }
   try {
     const t = execFileSync('gh', ['auth', 'token'], {
@@ -94,68 +98,74 @@ export type UpdateCheckResult = {
   checkedAt: string;
 };
 
+async function readRemoteVersion(token: string | null): Promise<{ version: string | null; httpStatus: number }> {
+  const apiUrl = `https://api.github.com/repos/${UPDATE_REPO}/contents/package.json?ref=${UPDATE_BRANCH}`;
+  const rawUrl = `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/package.json`;
+
+  const tryJson = async (url: string, headers: Record<string, string>) => {
+    try {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) return { version: null as string | null, httpStatus: res.status };
+      const body = (await res.json()) as { content?: string; version?: string };
+      if (body.content) {
+        const decoded = Buffer.from(body.content, 'base64').toString('utf8');
+        const pkg = JSON.parse(decoded) as { version?: string };
+        return { version: pkg.version || null, httpStatus: res.status };
+      }
+      if (body.version) return { version: body.version, httpStatus: res.status };
+      return { version: null as string | null, httpStatus: res.status };
+    } catch {
+      return { version: null as string | null, httpStatus: 0 };
+    }
+  };
+
+  if (token) {
+    const viaApi = await tryJson(apiUrl, githubHeaders(token));
+    if (viaApi.version) return viaApi;
+  }
+
+  const viaRaw = await tryJson(rawUrl, {
+    'User-Agent': 'istirak-nakit-dashboard-updater',
+    Accept: 'application/json',
+  });
+  if (viaRaw.version) return viaRaw;
+
+  if (!token) {
+    const viaPublicApi = await tryJson(apiUrl, githubHeaders(null));
+    if (viaPublicApi.version) return viaPublicApi;
+    return viaPublicApi.httpStatus ? viaPublicApi : viaRaw;
+  }
+
+  return { version: null, httpStatus: viaRaw.httpStatus || 401 };
+}
+
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
   const localVersion = getLocalVersion();
   const checkedAt = new Date().toISOString();
   const token = getGithubToken();
   try {
-    let remoteVersion: string | null = null;
-
-    if (token) {
-      const apiUrl = `https://api.github.com/repos/${UPDATE_REPO}/contents/package.json?ref=${UPDATE_BRANCH}`;
-      const res = await fetch(apiUrl, {
-        headers: githubHeaders(token),
-        signal: AbortSignal.timeout(20000),
-      });
-      if (!res.ok) {
-        return {
-          ok: false,
-          localVersion,
-          remoteVersion: null,
-          updateAvailable: false,
-          repo: UPDATE_REPO,
-          branch: UPDATE_BRANCH,
-          error:
-            res.status === 401 || res.status === 403
-              ? 'GitHub erişim anahtarı geçersiz veya yetkisiz (data/update-token.txt)'
-              : `Uzak sürüm okunamadı (HTTP ${res.status})`,
-          checkedAt,
-        };
-      }
-      const body = (await res.json()) as { content?: string; encoding?: string };
-      if (!body.content) throw new Error('package.json içeriği boş');
-      const decoded = Buffer.from(body.content, 'base64').toString('utf8');
-      const pkg = JSON.parse(decoded) as { version?: string };
-      remoteVersion = pkg.version || null;
-    } else {
-      const url = `https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/package.json`;
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'istirak-nakit-dashboard-updater', Accept: 'application/json' },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) {
-        return {
-          ok: false,
-          localVersion,
-          remoteVersion: null,
-          updateAvailable: false,
-          repo: UPDATE_REPO,
-          branch: UPDATE_BRANCH,
-          error:
-            'Repo özel görünüyor. Güncelleme için data/update-token.txt içine GitHub fine-grained token (Contents: Read) koyun.',
-          checkedAt,
-        };
-      }
-      const pkg = (await res.json()) as { version?: string };
-      remoteVersion = pkg.version || null;
+    const remote = await readRemoteVersion(token);
+    if (!remote.version) {
+      const needsToken = remote.httpStatus === 401 || remote.httpStatus === 403 || remote.httpStatus === 404;
+      return {
+        ok: false,
+        localVersion,
+        remoteVersion: null,
+        updateAvailable: false,
+        repo: UPDATE_REPO,
+        branch: UPDATE_BRANCH,
+        error: needsToken
+          ? 'GitHub deposu özel. Güncelleme için data/secrets/github-token.txt dosyasına Contents: Read yetkili bir token koyun.'
+          : `Uzak sürüm okunamadı (HTTP ${remote.httpStatus || 'ağ hatası'})`,
+        checkedAt,
+      };
     }
 
-    const updateAvailable = !!remoteVersion && compareVersions(remoteVersion, localVersion) > 0;
     return {
       ok: true,
       localVersion,
-      remoteVersion,
-      updateAvailable,
+      remoteVersion: remote.version,
+      updateAvailable: compareVersions(remote.version, localVersion) > 0,
       repo: UPDATE_REPO,
       branch: UPDATE_BRANCH,
       checkedAt,
@@ -274,7 +284,7 @@ export async function applyUpdate(): Promise<ApplyUpdateResult> {
   }
   applyInFlight = true;
   const localVersion = getLocalVersion();
-  const tmpRoot = path.join(PROJECT_ROOT, 'data', '_update_tmp');
+  const tmpRoot = path.join(TMP_DIR, 'update');
   const zipFile = path.join(tmpRoot, 'update.zip');
   const extractDir = path.join(tmpRoot, 'extract');
 

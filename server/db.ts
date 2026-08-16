@@ -5,18 +5,162 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
+
+/** All user data stays in this folder on this computer. */
 export const DATA_DIR = path.join(ROOT_DIR, 'data');
+export const DATABASE_DIR = path.join(DATA_DIR, 'database');
 export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 export const AVATARS_DIR = path.join(DATA_DIR, 'avatars');
 export const SAMPLES_DIR = path.join(DATA_DIR, 'samples');
+export const SECRETS_DIR = path.join(DATA_DIR, 'secrets');
+export const TMP_DIR = path.join(DATA_DIR, 'tmp');
 export const TEMPLATES_DIR = path.join(ROOT_DIR, 'templates');
 
-for (const dir of [DATA_DIR, UPLOADS_DIR, AVATARS_DIR, SAMPLES_DIR, TEMPLATES_DIR]) {
+for (const dir of [
+  DATA_DIR,
+  DATABASE_DIR,
+  UPLOADS_DIR,
+  AVATARS_DIR,
+  SAMPLES_DIR,
+  SECRETS_DIR,
+  TMP_DIR,
+  TEMPLATES_DIR,
+]) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-const dbPath = path.join(DATA_DIR, 'app.db');
-export const db = new Database(dbPath);
+function moveIfPresent(from: string, to: string) {
+  if (!fs.existsSync(from) || fs.existsSync(to)) return;
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  fs.renameSync(from, to);
+}
+
+function archiveSidecar(fromBase: string, toBase: string) {
+  fs.mkdirSync(path.dirname(toBase), { recursive: true });
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    const from = fromBase + suffix;
+    if (!fs.existsSync(from)) continue;
+    const to = toBase + suffix;
+    try {
+      if (fs.existsSync(to)) fs.rmSync(to, { force: true });
+      fs.renameSync(from, to);
+    } catch {
+      /* still open in another process */
+    }
+  }
+}
+
+function companyCountAt(file: string): number {
+  if (!fs.existsSync(file)) return 0;
+  try {
+    const probe = new Database(file, { readonly: true, fileMustExist: true });
+    try {
+      const has = probe
+        .prepare(`SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'companies'`)
+        .get();
+      if (!has) return 0;
+      const row = probe.prepare(`SELECT COUNT(*) AS c FROM companies`).get() as { c: number };
+      return Number(row?.c) || 0;
+    } finally {
+      probe.close();
+    }
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Prefer data/database/app.db. If an older data/app.db still has the real
+ * companies, use that instead of an empty leftover created by a stale server.
+ */
+function resolveDbPath(): string {
+  const nested = path.join(DATABASE_DIR, 'app.db');
+  const legacy = path.join(DATA_DIR, 'app.db');
+  const nestedCount = companyCountAt(nested);
+  const legacyCount = companyCountAt(legacy);
+
+  if (legacyCount > nestedCount) {
+    if (nestedCount === 0) {
+      for (const suffix of ['', '-wal', '-shm', '-journal']) {
+        moveIfPresent(legacy + suffix, nested + suffix);
+      }
+    }
+    return fs.existsSync(nested) && companyCountAt(nested) >= legacyCount ? nested : legacy;
+  }
+
+  if (fs.existsSync(legacy) && legacyCount === 0) {
+    archiveSidecar(legacy, path.join(TMP_DIR, 'empty-legacy-app.db'));
+  }
+  return nested;
+}
+
+/** Older installs kept the GitHub token at data/update-token.txt. */
+moveIfPresent(
+  path.join(DATA_DIR, 'update-token.txt'),
+  path.join(SECRETS_DIR, 'github-token.txt'),
+);
+
+export const DB_PATH = resolveDbPath();
+export const GITHUB_TOKEN_FILE = path.join(SECRETS_DIR, 'github-token.txt');
+export const db = new Database(DB_PATH);
+
+export const STORAGE_FOLDERS = {
+  data: DATA_DIR,
+  database: DATABASE_DIR,
+  uploads: UPLOADS_DIR,
+  avatars: AVATARS_DIR,
+  samples: SAMPLES_DIR,
+  secrets: SECRETS_DIR,
+  templates: TEMPLATES_DIR,
+} as const;
+
+export type StorageFolderKey = keyof typeof STORAGE_FOLDERS;
+
+export function getStorageInfo() {
+  return {
+    localOnly: true,
+    projectRoot: ROOT_DIR,
+    dataDir: DATA_DIR,
+    databaseFile: DB_PATH,
+    uploadsDir: UPLOADS_DIR,
+    avatarsDir: AVATARS_DIR,
+    samplesDir: SAMPLES_DIR,
+    secretsDir: SECRETS_DIR,
+    templatesDir: TEMPLATES_DIR,
+    folders: [
+      {
+        key: 'data' as const,
+        label: 'Tüm yerel veri',
+        path: DATA_DIR,
+        note: 'Buluta gitmez; yalnızca bu bilgisayarda durur.',
+      },
+      {
+        key: 'database' as const,
+        label: 'Veritabanı (SQLite)',
+        path: DB_PATH,
+        note: 'Şirketler, nakit akış, kullanıcılar ve işlem logları.',
+      },
+      {
+        key: 'uploads' as const,
+        label: 'Yüklenen Excel dosyaları',
+        path: UPLOADS_DIR,
+        note: 'İçe aktardığınız .xlsx kopyaları.',
+      },
+      {
+        key: 'avatars' as const,
+        label: 'Profil fotoğrafları',
+        path: AVATARS_DIR,
+        note: 'Hesabım sayfasından yüklenen görseller.',
+      },
+      {
+        key: 'samples' as const,
+        label: 'Örnek Excel şablonları',
+        path: SAMPLES_DIR,
+        note: 'Deneme için örnek dosyalar; silmek verinizi etkilemez.',
+      },
+    ],
+  };
+}
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

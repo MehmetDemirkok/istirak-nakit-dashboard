@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { api } from './routes.js';
-import { DATA_DIR } from './db.js';
+import { DATA_DIR, DB_PATH, db } from './db.js';
 import { clearAllSessions, cleanupExpiredSessions, ensureAdminUser } from './auth.js';
 import { authRoutes } from './authRoutes.js';
 import { activityMiddleware } from './activityLog.js';
@@ -42,6 +42,11 @@ if (isProd) {
 app.listen(PORT, HOST, () => {
   console.log(`\n  İştirak Nakit Dashboard`);
   console.log(`  API:  http://${HOST}:${PORT}`);
+  const companies = (
+    db.prepare(`SELECT COUNT(*) AS c FROM companies`).get() as { c: number }
+  ).c;
   console.log(`  Data: ${DATA_DIR}`);
-  console.log(`  (Yalnızca lokal — veri dışarı çıkmaz)\n`);
+  console.log(`  DB:   ${DB_PATH}`);
+  console.log(`  Companies: ${companies}`);
+  console.log(`  (Local only — data never leaves this computer)\n`);
 });

@@ -3,7 +3,8 @@ import multer from 'multer';
 import fs from 'node:fs';
 import path from 'node:path';
 import { v4 as uuid } from 'uuid';
-import { db, UPLOADS_DIR, type Company, type CompanyProfile } from './db.js';
+import { spawn } from 'node:child_process';
+import { db, UPLOADS_DIR, getStorageInfo, STORAGE_FOLDERS, type StorageFolderKey, type Company, type CompanyProfile } from './db.js';
 import { getLatestPeriod, importExcelFile, listCompanyPeriods } from './importService.js';
 import {
   companyHasData,
@@ -47,6 +48,30 @@ api.use(requireAuth);
 
 api.get('/system/version', (_req, res) => {
   res.json({ version: getLocalVersion() });
+});
+
+api.get('/system/storage', (_req, res) => {
+  res.json(getStorageInfo());
+});
+
+api.post('/system/storage/open', (req, res) => {
+  const key = (req.body as { folder?: string })?.folder as StorageFolderKey | undefined;
+  if (!key || !(key in STORAGE_FOLDERS)) {
+    return res.status(400).json({ error: 'folder must be one of: data, database, uploads, avatars, samples, secrets, templates' });
+  }
+  const target = STORAGE_FOLDERS[key];
+  try {
+    if (process.platform === 'win32') {
+      spawn('explorer', [target], { detached: true, stdio: 'ignore' }).unref();
+    } else if (process.platform === 'darwin') {
+      spawn('open', [target], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
+    }
+    res.json({ ok: true, path: target });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Klasör açılamadı' });
+  }
 });
 
 api.get('/system/update/check', async (_req, res) => {

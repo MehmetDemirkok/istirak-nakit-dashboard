@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 
 const wb = new ExcelJS.Workbook();
-await wb.xlsx.readFile('data/samples/ornek-nakit-akis.xlsx');
+await wb.xlsx.readFile('data/samples/sample-alfa-energy-2026-august.xlsx');
 const s = wb.worksheets.find((x) => /haftal/i.test(x.name))!;
 console.log('name', s.name, 'rowCount', s.rowCount, 'colCount', s.columnCount);
 console.log('actual', s.actualRowCount, s.actualColumnCount);

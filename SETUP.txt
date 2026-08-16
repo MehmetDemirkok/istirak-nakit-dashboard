@@ -1,0 +1,50 @@
+ISTIRAK CASH FLOW DASHBOARD — SETUP
+===================================
+
+You do not need to be a developer.
+
+1) Install Node.js (once)
+   https://nodejs.org → download LTS → install
+
+2) Copy this folder to your computer
+
+3) ONE FILE — double-click
+   Windows:  Start.bat
+   Mac:      Start.command
+             (If Mac blocks it: right-click → Open)
+
+   This file:
+   - installs missing pieces
+   - opens the app
+   - puts a shortcut on the Desktop
+
+4) Later launches
+   Double-click the Desktop shortcut "İştirak Nakit Dashboard"
+
+5) Updates
+   In the app: Account → “Check for updates / Update”
+   (Your data is kept)
+
+Login:  admin / Admin123!
+URL:    http://127.0.0.1:8787
+
+First launch is EMPTY: no companies, no Excel data.
+Only the admin login is created. Add companies yourself, or optionally run:
+  npm run seed:demo
+
+Updates (Account page → Güncelle):
+  Private GitHub repo: put a token in data/secrets/github-token.txt
+  (GitHub → Settings → Developer settings → Fine-grained token, Contents: Read)
+  Your data/ folder is kept.
+
+WHERE IS MY DATA?  (this computer only — nothing goes to the cloud)
+---------------------------------------------------------------
+  data/                  all local user data
+  data/database/app.db   SQLite database
+  data/uploads/          Excel files you imported
+  data/avatars/          profile photos
+  data/samples/          example Excel templates
+  data/secrets/          optional GitHub token for updates
+
+See data/README.md for details. You can also open these folders
+from Account → Local data in the app.

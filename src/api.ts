@@ -270,7 +270,43 @@ export const api = {
       body: '{}',
     }),
   getVersion: () => request<{ version: string }>('/api/system/version'),
+  getStorage: () => request<StorageInfo>('/api/system/storage'),
+  openStorageFolder: (folder: StorageFolderKey) =>
+    request<{ ok: boolean; path: string }>('/api/system/storage/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder }),
+    }),
 };
+
+export type StorageFolderKey =
+  | 'data'
+  | 'database'
+  | 'uploads'
+  | 'avatars'
+  | 'samples'
+  | 'secrets'
+  | 'templates';
+
+export interface StorageFolder {
+  key: StorageFolderKey;
+  label: string;
+  path: string;
+  note: string;
+}
+
+export interface StorageInfo {
+  localOnly: boolean;
+  projectRoot: string;
+  dataDir: string;
+  databaseFile: string;
+  uploadsDir: string;
+  avatarsDir: string;
+  samplesDir: string;
+  secretsDir: string;
+  templatesDir: string;
+  folders: StorageFolder[];
+}
 
 export interface ActivityLog {
   id: string;

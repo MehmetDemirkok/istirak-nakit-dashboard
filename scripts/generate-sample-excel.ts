@@ -25,13 +25,13 @@ type CompanySpec = {
 
 const COMPANIES: CompanySpec[] = [
   {
-    fileSlug: 'ornek-alfa-enerji-2026-agustos',
+    fileSlug: 'sample-alfa-energy-2026-august',
     name: '[TEST] Alfa Enerji A.Ş.',
     scale: 1,
     opening: 48_000_000,
   },
   {
-    fileSlug: 'ornek-beta-yazilim-2026-agustos',
+    fileSlug: 'sample-beta-software-2026-august',
     name: '[TEST] Beta Yazılım A.Ş.',
     scale: 0.62,
     opening: 22_500_000,

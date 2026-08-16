@@ -1,5 +1,11 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { api, type AuthUser, type UpdateCheck } from '../api';
+import { api, type AuthUser, type StorageInfo, type UpdateCheck } from '../api';
+
+function describeUpdate(r: UpdateCheck): { err: string | null; msg: string | null } {
+  if (!r.ok) return { err: r.error || 'Güncelleme kontrolü başarısız', msg: null };
+  if (r.updateAvailable) return { err: null, msg: `Yeni sürüm var: v${r.remoteVersion}` };
+  return { err: null, msg: `Güncelsiniz (v${r.localVersion})` };
+}
 
 export default function AccountPage({
   user,
@@ -21,6 +27,8 @@ export default function AccountPage({
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [updateErr, setUpdateErr] = useState<string | null>(null);
+  const [storage, setStorage] = useState<StorageInfo | null>(null);
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
   useEffect(() => {
     setFirstName(user.firstName || '');
@@ -30,18 +38,58 @@ export default function AccountPage({
 
   useEffect(() => {
     let cancelled = false;
+    const applyCheck = (r: UpdateCheck) => {
+      setUpdateInfo(r);
+      const d = describeUpdate(r);
+      setUpdateErr(d.err);
+      setUpdateMsg(d.msg);
+    };
+
     api
       .checkUpdate()
       .then((r) => {
-        if (!cancelled) setUpdateInfo(r);
+        if (!cancelled) applyCheck(r);
+      })
+      .catch((ex) => {
+        if (!cancelled) setUpdateErr(ex instanceof Error ? ex.message : 'Kontrol başarısız');
+      });
+    api
+      .getStorage()
+      .then((r) => {
+        if (!cancelled) setStorage(r);
       })
       .catch(() => {
-        /* sessiz — çevrimdışı olabilir */
+        /* ignore */
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const applyCheckFromResult = (r: UpdateCheck) => {
+    setUpdateInfo(r);
+    const d = describeUpdate(r);
+    setUpdateErr(d.err);
+    setUpdateMsg(d.msg);
+  };
+
+  const copyPath = async (p: string) => {
+    try {
+      await navigator.clipboard.writeText(p);
+      setCopiedPath(p);
+      setTimeout(() => setCopiedPath((cur) => (cur === p ? null : cur)), 1800);
+    } catch {
+      setErr('Yol kopyalanamadı');
+    }
+  };
+
+  const openFolder = async (folder: NonNullable<StorageInfo['folders'][number]['key']>) => {
+    try {
+      await api.openStorageFolder(folder);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : 'Klasör açılamadı');
+    }
+  };
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -99,10 +147,7 @@ export default function AccountPage({
     setUpdateMsg(null);
     try {
       const r = await api.checkUpdate();
-      setUpdateInfo(r);
-      if (!r.ok) setUpdateErr(r.error || 'Kontrol başarısız');
-      else if (!r.updateAvailable) setUpdateMsg(`Güncelsiniz (v${r.localVersion})`);
-      else setUpdateMsg(`Yeni sürüm var: v${r.remoteVersion}`);
+      applyCheckFromResult(r);
     } catch (ex) {
       setUpdateErr(ex instanceof Error ? ex.message : 'Kontrol başarısız');
     } finally {
@@ -141,7 +186,7 @@ export default function AccountPage({
       );
       if (r.restartScheduled) {
         setUpdateMsg(
-          `${r.message} Tarayıcı birkaç saniye içinde yanıt vermeyebilir; Baslat ile yeniden açın.`,
+          `${r.message} Tarayıcı birkaç saniye içinde yanıt vermeyebilir; Start ile yeniden açın.`,
         );
       }
     } catch (ex) {
@@ -159,14 +204,50 @@ export default function AccountPage({
       <div className="topbar">
         <div>
           <h2>Hesabım</h2>
-          <p>Ad, soyad, e-posta, profil fotoğrafı ve uygulama güncellemesi.</p>
+          <p>Ad, soyad, e-posta, profil fotoğrafı, güncelleme ve veri klasörleri.</p>
         </div>
       </div>
 
       {msg && <div className="alert ok">{msg}</div>}
       {err && <div className="alert err">{err}</div>}
 
-      <div className="account-layout">
+      <section className="card panel update-panel">
+        <div className="toolbar" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Uygulama güncellemesi</h3>
+            <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
+              GitHub’daki son sürüme bakar. Verileriniz (`data/`) korunur.
+            </p>
+          </div>
+          <span className="version-pill">v{updateInfo?.localVersion || '…'}</span>
+        </div>
+
+        {updateInfo?.updateAvailable && (
+          <div className="alert warn" style={{ marginTop: '0.85rem' }}>
+            Yeni sürüm hazır: <strong>v{updateInfo.remoteVersion}</strong> (bu bilgisayar: v
+            {updateInfo.localVersion})
+          </div>
+        )}
+        {updateMsg && <div className="alert ok">{updateMsg}</div>}
+        {updateErr && <div className="alert err">{updateErr}</div>}
+
+        <div className="toolbar" style={{ marginTop: '0.85rem' }}>
+          <button className="btn btn-ghost" type="button" disabled={updateBusy} onClick={refreshUpdate}>
+            {updateBusy ? 'Kontrol ediliyor…' : 'Güncelleme Kontrol Et'}
+          </button>
+          {updateInfo?.updateAvailable ? (
+            <button className="btn btn-accent" type="button" disabled={updateBusy} onClick={runUpdate}>
+              {updateBusy ? 'Güncelleniyor…' : `Güncelle (v${updateInfo.remoteVersion})`}
+            </button>
+          ) : (
+            <button className="btn btn-primary" type="button" disabled={updateBusy} onClick={refreshUpdate}>
+              {updateBusy ? 'Kontrol ediliyor…' : 'Güncelle'}
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div className="account-layout" style={{ marginTop: '1rem' }}>
         <section className="card panel account-photo-card">
           <h3 style={{ marginTop: 0 }}>Profil fotoğrafı</h3>
           <div className="account-photo-wrap">
@@ -239,41 +320,28 @@ export default function AccountPage({
       </div>
 
       <section className="card panel" style={{ marginTop: '1rem' }}>
-        <div className="toolbar" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h3 style={{ margin: 0 }}>Uygulama güncellemesi</h3>
-            <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-              GitHub’daki son sürümü kontrol eder. Verileriniz (data klasörü) korunur. Repo özel ise{' '}
-              <code>data/update-token.txt</code> dosyasına Contents: Read yetkili token koyun.
-            </p>
+        <h3 style={{ margin: 0 }}>Yerel veri</h3>
+        <p style={{ margin: '0.35rem 0 0.85rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
+          Tüm veriler yalnızca bu bilgisayarda, proje klasöründeki <strong>data/</strong> altında durur.
+          Buluta gönderilmez. Güncelleme bu klasöre dokunmaz.
+        </p>
+        {storage?.folders.map((folder) => (
+          <div key={folder.key} className="storage-row">
+            <div className="storage-row-text">
+              <div className="storage-label">{folder.label}</div>
+              <code className="storage-path">{folder.path}</code>
+              <div className="storage-note">{folder.note}</div>
+            </div>
+            <div className="storage-actions">
+              <button className="btn btn-ghost" type="button" onClick={() => copyPath(folder.path)}>
+                {copiedPath === folder.path ? 'Kopyalandı' : 'Yolu kopyala'}
+              </button>
+              <button className="btn btn-ghost" type="button" onClick={() => openFolder(folder.key)}>
+                Klasörü aç
+              </button>
+            </div>
           </div>
-          <span className="version-pill">
-            v{updateInfo?.localVersion || '…'}
-          </span>
-        </div>
-
-        {updateInfo?.updateAvailable && (
-          <div className="alert warn" style={{ marginTop: '0.85rem' }}>
-            Uygulamanın yeni sürümü var: <strong>v{updateInfo.remoteVersion}</strong> (mevcut:{' '}
-            v{updateInfo.localVersion})
-          </div>
-        )}
-        {updateMsg && <div className="alert ok">{updateMsg}</div>}
-        {updateErr && <div className="alert err">{updateErr}</div>}
-
-        <div className="toolbar" style={{ marginTop: '0.85rem' }}>
-          <button className="btn btn-ghost" type="button" disabled={updateBusy} onClick={refreshUpdate}>
-            {updateBusy ? 'Kontrol ediliyor…' : 'Güncelleme Kontrol Et'}
-          </button>
-          <button
-            className="btn btn-primary"
-            type="button"
-            disabled={updateBusy || !updateInfo?.updateAvailable}
-            onClick={runUpdate}
-          >
-            {updateBusy ? 'Güncelleniyor…' : 'Güncelle'}
-          </button>
-        </div>
+        ))}
       </section>
     </>
   );

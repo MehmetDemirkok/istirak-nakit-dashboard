@@ -1,63 +1,91 @@
 # İştirak Nakit Akış Dashboard
 
-Lokal web uygulaması: iştirak Excel’lerini dashboard’a çevirir; PPTX / PDF / Excel üretir.  
-**Tüm veri yalnızca bu bilgisayarda kalır** — dış API, telemetri veya bulut yok.
+Local web app: turns subsidiary Excel files into a dashboard; exports PPTX / PDF / Excel.  
+**All data stays on this computer** — no external API, telemetry, or cloud.
 
-## Son kullanıcı (yazılımcı değil)
+## End user (not a developer)
 
-1. [Node.js LTS](https://nodejs.org) kurun (bir kez).  
-2. Bu klasörü bilgisayara kopyalayın.  
-3. **Tek dosya:** `Baslat.bat` (Windows) veya `Baslat.command` (Mac) → çift tık.  
-4. Masaüstündeki kısayola çift tıklayın → [http://127.0.0.1:8787](http://127.0.0.1:8787)
+1. Install [Node.js LTS](https://nodejs.org) (once).  
+2. Copy this folder to the computer.  
+3. **One file:** `Start.bat` (Windows) or `Start.command` (Mac) → double-click.  
+4. Double-click the Desktop shortcut → [http://127.0.0.1:8787](http://127.0.0.1:8787)
 
-Detay: **`KURULUM.txt`** · İlk giriş: `admin` / `Admin123!`
+Details: **`SETUP.txt`** · First login: `admin` / `Admin123!`  
+A GitHub clone starts **empty** (no companies). Your existing `data/` folder is never overwritten by an update.
 
-## Geliştirici
+In-app updates: **Account → Güncelle**. Private GitHub repos need `data/secrets/github-token.txt` (Contents: Read).
+
+## Folder map
+
+```
+.
+├── Start.bat / Start.command   Launch the app (double-click)
+├── SETUP.txt                   Setup for non-developers
+├── data/                       ★ ALL user data (this PC only)
+│   ├── database/app.db         SQLite: companies, cash flow, users, logs
+│   ├── uploads/                Imported Excel copies
+│   ├── avatars/                Profile photos
+│   ├── samples/                Example Excel templates
+│   ├── secrets/                Optional GitHub token for updates
+│   └── tmp/                    Temporary update files
+├── templates/                  PPTX layout references (not user data)
+├── src/                        Frontend (React)
+├── server/                     Backend (Express + SQLite)
+├── scripts/                    Start / demo / sample helpers
+├── dist/                       Built frontend (generated)
+└── dist-server/                Built backend (generated)
+```
+
+In the app: **Account → Local data** shows these paths and can open the folders.
+
+## Developer
 
 ```bash
 npm install
 npm run dev          # http://127.0.0.1:5173
-npm run build && npm start   # üretim: http://127.0.0.1:8787
+npm run build && npm start   # production: http://127.0.0.1:8787
 ```
 
-## Demo veri (müşteri sunumu)
+## Demo data (client presentation)
 
-Yüksek tutarlı örnek holding + 4 iştirak ve 2026 nakit akışını yükler / siler:
+Loads / removes a high-value sample holding + 4 subsidiaries and 2026 cash flow:
 
 ```bash
-npm run seed:demo    # Nova Teknoloji Holding + iştirakler (yüksek tutarlar)
-npm run seed:clear   # Tüm demo şirketleri ve bağlı verileri siler
+npm run seed:demo    # Nova Teknoloji Holding + subsidiaries
+npm run seed:clear   # Deletes demo companies only
 ```
 
-- `seed:demo` önce varsa eski demoyu temizler, sonra yeniden ekler.
-- `seed:clear` yalnızca siler; gerçek (demo olmayan) şirketlere dokunmaz.
-- Demo iştirak adları `[DEMO]` ile başlar; ana şirket: **Nova Teknoloji Holding A.Ş.**
-- Giriş değişmez: `admin` / `Admin123!`
+- `seed:demo` clears any previous demo first, then re-adds it.
+- `seed:clear` only deletes; real (non-demo) companies are untouched.
+- Demo subsidiary names start with `[DEMO]`; parent: **Nova Teknoloji Holding A.Ş.**
+- Login stays: `admin` / `Admin123!`
 
-## Kullanım akışı
+## Usage flow
 
-1. **Şirketler** — Ana holding + iştirakleri ve profilleri yönetin.  
-2. **Excel Yükle** — İştirak + yıl/ay seçip `.xlsx` yükleyin.  
-3. **Dashboard** — Dönem bazlı KPI ve grafikler.  
-4. **Rapor** — PPTX / PDF / Excel indirin.  
-5. **İşlem Logları** — Kim, ne zaman, ne yaptı.  
-6. **Hesabım** — Ad, soyad, e-posta ve profil fotoğrafı.
+1. **Companies** — Parent holding + subsidiaries and profiles.  
+2. **Excel upload** — Pick subsidiary + year/month, upload `.xlsx`.  
+3. **Dashboard** — Period KPIs and charts.  
+4. **Report** — Download PPTX / PDF / Excel.  
+5. **Activity logs** — Who did what, when.  
+6. **Account** — Name, email, photo, updates, **local data paths**.
 
-## Veri konumu
+## Data location
 
-| Yol | İçerik |
-|-----|--------|
-| `data/app.db` | SQLite veritabanı |
-| `data/uploads/` | Yüklenen Excel dosyaları |
-| `data/samples/` | Örnek şablon |
+| Path | Contents |
+|------|----------|
+| `data/database/app.db` | SQLite database |
+| `data/uploads/` | Imported Excel files |
+| `data/avatars/` | Profile photos |
+| `data/samples/` | Example templates |
+| `data/secrets/` | Optional update token |
 
-Sunucu yalnızca `127.0.0.1` adresine bağlanır.
+The server binds to `127.0.0.1` only. See `data/README.md`.
 
-## Excel kuralları
+## Excel rules
 
-- Asıl kaynak: **NAKİT AKIŞ-Haftalık**
-- Satır kodları: `F-A.01`, `F-B.01`, … (kategoriler A–J)
+- Source sheet: **NAKİT AKIŞ-Haftalık**
+- Row codes: `F-A.01`, `F-B.01`, … (categories A–J)
 
-## Teknoloji
+## Stack
 
 React + Vite · Express · SQLite · ExcelJS · Recharts · PptxGenJS · PDFKit
